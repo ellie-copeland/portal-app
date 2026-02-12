@@ -1,13 +1,15 @@
 {
-  "name": "portal-app",
+  "name": "cloud-employee-portal",
   "version": "1.0.0",
-  "description": "Cloud Employee Portal MVP",
+  "description": "Cloud Employee Portal MVP - Agent Management & Collaboration Platform",
+  "private": true,
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
@@ -25,5 +27,9 @@
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
