@@ -1,189 +1,201 @@
-# Cloud Employee Portal MVP
+# Cloud Employee Portal
 
-A full-featured agent management and collaboration platform built with Next.js, React, TailwindCSS, and Supabase.
+A modern agent management and collaboration platform built with Next.js, React, and Tailwind CSS. Designed to match Assistable-v2 design standards.
 
-## Features
-
-- **Agent Builder UI** - Create and manage hierarchical agent structures (master agents + sub-agents)
-- **Unified Chat Thread** - Slack-style messaging with all agents in one view
-- **Kanban Board** - Task management with To-Do/Doing/Stuck columns and drag-drop reordering
-- **LLM Config Panel** - Per-agent model selection, temperature, and context window configuration
-- **Workspace Selector** - Multi-tenant ready workspace switching
-- **Usage Dashboard** - Token counts, API calls, and cost tracking
-- **Authentication** - Secure email/password login with Supabase Auth
-
-## Tech Stack
-
-- **Frontend**: Next.js 14, React 18, TailwindCSS
-- **Backend**: Supabase (PostgreSQL + Auth + Realtime)
-- **LLM Integration**: OpenRouter API
-- **Language**: TypeScript + Zod for validation
-- **Deployment**: Vercel
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
-
-- Node.js 18+ (v25.6.0 recommended)
-- npm or yarn package manager
+- Node.js 18+
+- npm 8+
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/portal-app.git
-   cd portal-app
-   ```
+```bash
+npm install
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### Development
 
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
-   Update `.env.local` with your actual values:
-   - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
-   - `NEXT_PUBLIC_OPENROUTER_KEY` - Your OpenRouter API key (optional for development)
+```bash
+npm run dev
+```
 
-4. **Run the development server**
-   ```bash
-   npm run dev
-   ```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-5. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+### Build
 
-## Database Schema
+```bash
+npm run build
+npm start
+```
 
-### Tables
+## Features
 
-- **workspaces** - Multi-tenant workspace management
-- **users** - User accounts with workspace association
-- **agents** - Agent definitions with hierarchical relationships
-- **agent_configs** - LLM configuration per agent (model, temperature, context)
-- **chat_messages** - Unified chat messages across all agents
-- **tasks** - Kanban board tasks with status tracking
-- **usage_metrics** - API usage tracking and cost analysis
+### 🤖 Agent Management
+- Create main and sub-agents
+- Configure LLM models (GPT-4, Claude, Llama, etc.)
+- Set safety constraints
+- Assign roles and prompts
+- Active/inactive status management
 
-## Project Structure
+### 📋 Task Management
+- **Kanban Board**: Organize tasks in 4 columns (To-Do → Doing → Stuck → Done)
+- **Calendar View**: Monthly view of scheduled tasks
+- Recurring tasks (Daily, Weekly, Monthly, Yearly)
+- Task filtering and search
+- Priority levels and due dates
+- Agent assignment to tasks
+
+### 💬 Chat & Collaboration
+- Slack-style threaded conversations
+- @mention agents within messages
+- Multiple parallel conversations
+- Unread message indicators
+- Real-time message updates
+- Search across conversations
+
+## Architecture
+
+### Technology Stack
+- **Framework**: Next.js 14 (App Router)
+- **UI Library**: React 18
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+- **State Management**: React Hooks
+
+### File Structure
 
 ```
-portal-app/
+src/
 ├── app/
-│   ├── api/              # API routes
-│   ├── dashboard/        # Main dashboard page
-│   ├── layout.tsx        # Root layout
-│   ├── page.tsx          # Login/auth page
-│   └── globals.css       # Global styles
-├── components/           # React components
-│   ├── AgentBuilder.tsx
-│   ├── ChatThread.tsx
-│   ├── KanbanBoard.tsx
-│   ├── LLMConfig.tsx
-│   ├── UsageDashboard.tsx
-│   └── WorkspaceSelector.tsx
+│   ├── layout.tsx           # Root layout
+│   ├── page.tsx            # Main dashboard
+│   ├── globals.css         # Global styles
+│   └── api/                # API routes (stubs)
+├── components/
+│   ├── Sidebar.tsx         # Main navigation
+│   ├── AgentForm.tsx       # Agent creation/edit
+│   ├── AgentCard.tsx       # Agent display
+│   ├── KanbanBoard.tsx     # Kanban board
+│   ├── CalendarView.tsx    # Calendar display
+│   ├── TaskFilters.tsx     # Task filters
+│   ├── ChatThread.tsx      # Chat interface
+│   └── pages/
+│       ├── AgentsPage.tsx      # Agent management
+│       ├── TasksPage.tsx       # Task management
+│       └── ChatPage.tsx        # Chat interface
 ├── lib/
-│   ├── db/
-│   │   ├── schema.ts     # TypeScript interfaces
-│   │   └── supabase.ts   # Supabase client setup
-│   └── auth/
-├── public/               # Static assets
-└── package.json          # Dependencies
+│   ├── utils.ts            # Utility functions
+│   └── db/
+│       └── supabase.ts     # Auth stubs
+├── tailwind.config.js
+├── tsconfig.json
+└── package.json
 ```
 
-## Key Features in Detail
+## Design System
 
-### Agent Builder
-- Hierarchical tree view of agents
-- Drag-and-drop agent creation
-- Parent-child relationships
-- Real-time updates
+The application matches the Assistable-v2 design system with:
 
-### Chat Thread
-- Slack-style messaging interface
-- Agent identification per message
-- Timestamp tracking
-- Auto-scroll to latest messages
+- **Color Palette**: Light backgrounds with dark text
+- **Typography**: System font stack with proper hierarchy
+- **Spacing**: Consistent 4px-based spacing scale
+- **Components**: Reusable button, card, and form components
+- **Icons**: Lucide React icons throughout
 
-### Kanban Board
-- Three default columns: To-Do, Doing, Stuck
-- Drag-and-drop task reordering between columns
-- Task creation with descriptions
-- Persistent state management
+## Development
 
-### LLM Configuration
-- Per-agent model selection
-- Temperature adjustment (0-1 scale)
-- Context window configuration
-- System prompt customization
+### Available Scripts
 
-### Usage Dashboard
-- Real-time token tracking
-- API call counters
-- Cost calculation per agent
-- Summary statistics
+```bash
+# Start dev server
+npm run dev
 
-### Workspace Management
-- Multi-tenant support
-- Workspace switching
-- Team collaboration
-- Isolated data per workspace
+# Build for production
+npm run build
 
-## Authentication Flow
+# Start production server
+npm start
 
-1. User signs up or logs in with email/password
-2. Supabase Auth handles credential validation
-3. Session maintained via Supabase client
-4. Protected routes redirect to login if unauthenticated
-5. User dashboard accessible after successful authentication
+# Type checking
+npm run type-check
 
-## Development Notes
+# Linting
+npm run lint
+```
 
-- All components are client-side for MVP (add server-side later if needed)
-- Styling uses TailwindCSS utility classes for fast iteration
-- Placeholder data in components for immediate UI testing
-- No external animation libraries - uses CSS for simplicity
-- Ready for backend API integration
+## State Management
 
-## Deployment
+The application uses React hooks for state management:
+- `useState` for component state
+- Custom hooks for shared logic
+- No external state management needed for MVP
 
-### Deploy to Vercel
+## Data Model
 
-1. **Push to GitHub**
-   ```bash
-   git remote add origin https://github.com/your-username/portal-app.git
-   git branch -M main
-   git push -u origin main
-   ```
+### Agent
+```typescript
+interface Agent {
+  id: string
+  name: string
+  type: 'main' | 'sub'
+  llm: string
+  status: 'active' | 'inactive'
+  description: string
+  constraints: string[]
+  role: string
+}
+```
 
-2. **Connect to Vercel**
-   - Go to [vercel.com](https://vercel.com)
-   - Import the GitHub repository
-   - Add environment variables in Vercel dashboard
-   - Deploy!
+### Task
+```typescript
+interface Task {
+  id: string
+  title: string
+  description: string
+  status: 'todo' | 'doing' | 'stuck' | 'done'
+  assignedAgent: string
+  dueDate: string
+  recurring: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
+  scheduled: boolean
+  priority: 'low' | 'medium' | 'high'
+}
+```
 
-3. **Environment Variables on Vercel**
-   - Set the same variables from `.env.example`
-   - Vercel will build and deploy automatically
+### Message
+```typescript
+interface Message {
+  id: string
+  author: string
+  content: string
+  timestamp: string
+  mentions: string[]
+}
+```
 
-## Next Steps / Phase 2
+## Future Enhancements
 
-- Implement actual database operations with Supabase
-- Add real OpenRouter API integration
-- Real-time chat with Supabase subscriptions
-- File upload support
-- Agent execution logging
-- Advanced analytics
-- Webhook integrations
+- Backend API integration
+- WebSocket support for real-time updates
+- Database persistence
+- User authentication
+- File uploads
+- Advanced task scheduling
+- Performance analytics
+- Agent activity logs
+
+## Notes
+
+- Authentication is handled externally by createassistants.com
+- No database required for MVP (mock data only)
+- All features are implemented client-side
+- Ready for backend integration
 
 ## License
 
 MIT
 
-## Support
+## Author
 
-For issues and questions, please open a GitHub issue or contact the development team.
+Built as part of Assistable platform ecosystem.

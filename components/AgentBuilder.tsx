@@ -67,7 +67,7 @@ export default function AgentBuilder() {
   const renderAgentTree = (agent: Agent, level: number = 0) => (
     <div key={agent.id} className={`ml-${level * 4}`}>
       <div
-        className="p-3 mb-2 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100"
+        className="p-3 mb-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40"
         onClick={() => setSelectedParent(agent.id)}
       >
         <h4 className="font-semibold text-gray-900">{agent.name}</h4>

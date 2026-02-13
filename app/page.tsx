@@ -1,99 +1,65 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { signIn, signUp } from '@/lib/db/supabase'
+import { useState, useEffect } from 'react'
+import Sidebar from '@/components/Sidebar'
+import Header from '@/components/Header'
+import AgentsPage from '@/components/pages/AgentsPage'
+import TasksPage from '@/components/pages/TasksPage'
+import ChatPage from '@/components/pages/ChatPage'
+import CommandCenterPage from '@/components/pages/CommandCenterPage'
+import ExecutionsPage from '@/components/pages/ExecutionsPage'
+import IntegrationsPage from '@/components/pages/IntegrationsPage'
+import BillingPage from '@/components/pages/BillingPage'
+import TemplatesPage from '@/components/pages/TemplatesPage'
+import MonitoringPage from '@/components/pages/MonitoringPage'
+import SupervisedPage from '@/components/pages/SupervisedPage'
+import AgentChatPage from '@/components/pages/AgentChatPage'
+import SetupWizardPage from '@/components/pages/SetupWizardPage'
+import SecurityPage from '@/components/pages/SecurityPage'
+import SettingsPage from '@/components/pages/SettingsPage'
+import TeamPage from '@/components/pages/TeamPage'
 
-export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isSignUp, setIsSignUp] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const router = useRouter()
+export type PageType = 'agents' | 'tasks' | 'chat' | 'command-center' | 'executions' | 'integrations' | 'billing' | 'templates' | 'monitoring' | 'supervised' | 'agent-chat' | 'setup' | 'security' | 'settings' | 'team'
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+export default function Dashboard() {
+  const [currentPage, setCurrentPage] = useState<PageType>('command-center')
+  const [darkMode, setDarkMode] = useState(false)
 
-    try {
-      if (isSignUp) {
-        const { error } = await signUp(email, password)
-        if (error) throw error
-        alert('Check your email to confirm signup!')
-      } else {
-        const { data, error } = await signIn(email, password)
-        if (error) throw error
-        if (data?.session) {
-          router.push('/dashboard')
-        }
-      }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred')
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode)
+  }, [darkMode])
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'command-center': return <CommandCenterPage />
+      case 'agents': return <AgentsPage />
+      case 'templates': return <TemplatesPage />
+      case 'monitoring': return <MonitoringPage />
+      case 'supervised': return <SupervisedPage />
+      case 'agent-chat': return <AgentChatPage />
+      case 'tasks': return <TasksPage />
+      case 'chat': return <ChatPage />
+      case 'executions': return <ExecutionsPage />
+      case 'integrations': return <IntegrationsPage />
+      case 'billing': return <BillingPage />
+      case 'setup': return <SetupWizardPage />
+      case 'security': return <SecurityPage />
+      case 'settings': return <SettingsPage />
+      case 'team': return <TeamPage />
+      default: return <CommandCenterPage />
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-800">
-      <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-lg">
-        <h1 className="text-3xl font-bold text-center mb-8 text-gray-900">
-          Cloud Employee Portal
-        </h1>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
-              required
-            />
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
-          </button>
-        </form>
-
-        <button
-          onClick={() => {
-            setIsSignUp(!isSignUp)
-            setError('')
-          }}
-          className="w-full mt-4 text-blue-600 hover:text-blue-700 text-sm"
-        >
-          {isSignUp ? 'Have an account? Sign In' : 'Create an account'}
-        </button>
+    <div className="flex h-screen bg-background">
+      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="pt-14 md:pt-0">
+          <Header onNavigate={setCurrentPage} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />
+        </div>
+        <main className="flex-1 overflow-auto">
+          {renderPage()}
+        </main>
       </div>
     </div>
   )

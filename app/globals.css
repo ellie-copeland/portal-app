@@ -1,23 +1,92 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+:root {
+  --background: 240 20% 95%;
+  --foreground: 260 20% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 260 20% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 260 20% 10%;
+  --primary: 262 80% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 174 60% 45%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 10% 93%;
+  --muted-foreground: 240 5% 46%;
+  --accent: 174 60% 45%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 10% 82%;
+  --input: 240 10% 82%;
+  --ring: 262 80% 55%;
+  --chart-1: 262 80% 55%;
+  --chart-2: 174 60% 45%;
+  --chart-3: 200 70% 50%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 150 60% 50%;
+}
+
+.dark {
+  --background: 220 15% 9%;
+  --foreground: 0 0% 95%;
+  --card: 240 15% 12%;
+  --card-foreground: 0 0% 95%;
+  --popover: 240 15% 12%;
+  --popover-foreground: 0 0% 95%;
+  --primary: 262 80% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 174 50% 40%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 10% 18%;
+  --muted-foreground: 240 5% 60%;
+  --accent: 174 50% 40%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 62.8% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 10% 20%;
+  --input: 240 10% 20%;
+  --ring: 262 80% 60%;
+  --chart-1: 262 80% 60%;
+  --chart-2: 174 60% 50%;
+  --chart-3: 200 70% 55%;
+  --chart-4: 280 65% 65%;
+  --chart-5: 150 60% 55%;
+}
 
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  @apply border-border;
+}
+
+/* Light mode card visibility */
+:root .bg-card {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+}
+.dark .bg-card {
+  box-shadow: none;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Source Sans Pro',
+  @apply bg-background text-foreground transition-colors duration-200;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
     sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f9fafb;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+  background-color: hsl(var(--background)) !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
