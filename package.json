@@ -16,6 +16,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.44",
     "@ai-sdk/openai": "^3.0.29",
     "@ai-sdk/openai-compatible": "^2.0.30",
     "@ai-sdk/react": "^3.0.88",

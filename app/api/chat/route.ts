@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db'
 import { getAuthContext, isAuthContext } from '@/lib/middleware'
 import { getUserApiKey } from '@/lib/llm'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import { createOpenAI } from '@ai-sdk/openai'
+import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { streamText, tool, stepCountIs, zodSchema } from 'ai'
 import { z } from 'zod'
@@ -57,19 +59,52 @@ async function scrapeWebpageExecute({ url }: { url: string }): Promise<{ url: st
   }
 }
 
-// Map model names to provider configs
+// Model name mapping (display name → API model ID)
+const MODEL_ID_MAP: Record<string, string> = {
+  'claude-opus-4': 'claude-opus-4-20250514',
+  'claude-sonnet-4': 'claude-sonnet-4-20250514',
+  'claude-3.5-sonnet': 'claude-3-5-sonnet-20241022',
+  'claude-3.5-haiku': 'claude-3-5-haiku-20241022',
+  'claude-haiku-4': 'claude-3-5-haiku-20241022',
+  'claude-3-opus': 'claude-3-opus-20240229',
+  'claude-sonnet': 'claude-sonnet-4-20250514',
+  'claude-opus': 'claude-opus-4-20250514',
+  'claude-haiku': 'claude-3-5-haiku-20241022',
+}
+
+function cleanModel(model: string): string {
+  const stripped = model.replace(/^(anthropic|openai|openrouter)\//, '')
+  return MODEL_ID_MAP[stripped] || stripped
+}
+
+function detectProvider(model: string): 'anthropic' | 'openai' | 'openrouter' {
+  if (model.startsWith('claude') || model.startsWith('anthropic/')) return 'anthropic'
+  if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('openai/')) return 'openai'
+  return 'openrouter'
+}
+
+// Use direct provider SDKs instead of routing everything through OpenRouter
 function getProviderForModel(model: string, apiKey: string) {
-  // For OpenRouter (default), use OpenAI-compatible with OpenRouter base URL
+  const provider = detectProvider(model)
+  const modelId = cleanModel(model)
+
+  if (provider === 'anthropic') {
+    const anthropic = createAnthropic({ apiKey })
+    return anthropic(modelId)
+  }
+
+  if (provider === 'openai') {
+    const openai = createOpenAI({ apiKey })
+    return openai(modelId)
+  }
+
+  // Fallback: OpenRouter for everything else
   const openrouter = createOpenAICompatible({
     name: 'openrouter',
     baseURL: 'https://openrouter.ai/api/v1',
     apiKey,
-    headers: {
-      'HTTP-Referer': 'https://portal-app-gamma.vercel.app',
-    },
+    headers: { 'HTTP-Referer': 'https://portal-app-gamma.vercel.app' },
   })
-
-  // OpenRouter accepts model IDs directly
   return openrouter(model)
 }
 
@@ -130,9 +165,7 @@ export async function POST(req: NextRequest) {
   // Get API key
   const model = agent.model || 'gpt-4o-mini'
   const config = (agent.config as Record<string, unknown>) || {}
-  let provider = 'openrouter'
-  if (model.startsWith('claude') || model.startsWith('anthropic/')) provider = 'anthropic'
-  else if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('openai/')) provider = 'openai'
+  const provider = detectProvider(model)
 
   const apiKey = await getUserApiKey(ctx.userId, provider)
   if (!apiKey) {
