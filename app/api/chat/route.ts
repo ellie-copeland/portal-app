@@ -249,10 +249,14 @@ export async function POST(req: NextRequest) {
         const encoder = new TextEncoder()
         try {
           for await (const chunk of result.textStream) {
-            controller.enqueue(encoder.encode(chunk))
+            if (chunk) {
+              controller.enqueue(encoder.encode(chunk))
+            }
           }
         } catch (err) {
           console.error('Stream error:', err)
+          const errMsg = err instanceof Error ? err.message : String(err)
+          controller.enqueue(encoder.encode(`\n\n❌ Stream error: ${errMsg}`))
         } finally {
           controller.close()
         }
@@ -262,8 +266,8 @@ export async function POST(req: NextRequest) {
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
         'X-Conversation-Id': convId!,
+        'Cache-Control': 'no-cache',
       },
     })
   } catch (err) {
