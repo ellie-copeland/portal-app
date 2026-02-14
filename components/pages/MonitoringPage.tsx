@@ -43,9 +43,9 @@ interface WatchRule {
 }
 
 const severityConfig = {
-  critical: { color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', icon: AlertTriangle },
-  warning: { color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: Bell },
-  info: { color: 'text-sky-600', bg: 'bg-sky-50', border: 'border-sky-200', icon: CheckCircle2 },
+  critical: { color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', icon: AlertTriangle },
+  warning: { color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', icon: Bell },
+  info: { color: 'text-sky-600 dark:text-sky-400', bg: 'bg-sky-50 dark:bg-sky-900/20', border: 'border-sky-200 dark:border-sky-800', icon: CheckCircle2 },
 }
 
 export default function MonitoringPage() {
@@ -178,20 +178,20 @@ export default function MonitoringPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
           <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-100 dark:border-red-800">
-            <p className="text-xs text-red-600 font-medium">Critical</p>
-            <p className="text-2xl font-bold text-red-900 dark:text-red-100">{alerts.filter(a => a.severity === 'critical').length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Critical</p>
+            <p className="text-2xl font-bold text-foreground">{alerts.filter(a => a.severity === 'critical').length}</p>
           </div>
           <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-800">
-            <p className="text-xs text-amber-600 font-medium">Warnings</p>
-            <p className="text-2xl font-bold text-amber-700">{alerts.filter(a => a.severity === 'warning').length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Warnings</p>
+            <p className="text-2xl font-bold text-foreground">{alerts.filter(a => a.severity === 'warning').length}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
-            <p className="text-xs text-emerald-600 font-medium">Resolved</p>
-            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{alerts.filter(a => a.status === 'resolved').length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Resolved</p>
+            <p className="text-2xl font-bold text-foreground">{alerts.filter(a => a.status === 'resolved').length}</p>
           </div>
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
-            <p className="text-xs text-purple-600 font-medium">Active Rules</p>
-            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{rules.filter(r => r.enabled).length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Active Rules</p>
+            <p className="text-2xl font-bold text-foreground">{rules.filter(r => r.enabled).length}</p>
           </div>
         </div>
 

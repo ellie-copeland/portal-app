@@ -27,6 +27,12 @@ export interface Execution {
   output: string
 }
 
+function getTeamPrefix(): string {
+  if (typeof window === 'undefined') return ''
+  const teamId = localStorage.getItem('activeTeamId') || 'default'
+  return `team-${teamId}-`
+}
+
 const AGENTS_KEY = 'portal-agents'
 const EXECUTIONS_KEY = 'portal-executions'
 
@@ -180,9 +186,10 @@ const DEFAULT_EXECUTIONS: Execution[] = [
 export function getAgents(): Agent[] {
   if (typeof window === 'undefined') return DEFAULT_AGENTS
   try {
-    const raw = localStorage.getItem(AGENTS_KEY)
+    const key = getTeamPrefix() + AGENTS_KEY
+    const raw = localStorage.getItem(key)
     if (!raw) {
-      localStorage.setItem(AGENTS_KEY, JSON.stringify(DEFAULT_AGENTS))
+      localStorage.setItem(key, JSON.stringify(DEFAULT_AGENTS))
       return DEFAULT_AGENTS
     }
     return JSON.parse(raw)
@@ -191,15 +198,16 @@ export function getAgents(): Agent[] {
 
 export function saveAgents(agents: Agent[]) {
   if (typeof window === 'undefined') return
-  try { localStorage.setItem(AGENTS_KEY, JSON.stringify(agents)) } catch (e) { console.error("localStorage error:", e) }
+  try { localStorage.setItem(getTeamPrefix() + AGENTS_KEY, JSON.stringify(agents)) } catch (e) { console.error("localStorage error:", e) }
 }
 
 export function getExecutions(): Execution[] {
   if (typeof window === 'undefined') return DEFAULT_EXECUTIONS
   try {
-    const raw = localStorage.getItem(EXECUTIONS_KEY)
+    const key = getTeamPrefix() + EXECUTIONS_KEY
+    const raw = localStorage.getItem(key)
     if (!raw) {
-      localStorage.setItem(EXECUTIONS_KEY, JSON.stringify(DEFAULT_EXECUTIONS))
+      localStorage.setItem(key, JSON.stringify(DEFAULT_EXECUTIONS))
       return DEFAULT_EXECUTIONS
     }
     return JSON.parse(raw)
@@ -232,15 +240,16 @@ const DEFAULT_TASKS: Task[] = [
 export function getTasks(): Task[] {
   if (typeof window === 'undefined') return DEFAULT_TASKS
   try {
-    const raw = localStorage.getItem(TASKS_KEY)
-    if (!raw) { localStorage.setItem(TASKS_KEY, JSON.stringify(DEFAULT_TASKS)); return DEFAULT_TASKS }
+    const key = getTeamPrefix() + TASKS_KEY
+    const raw = localStorage.getItem(key)
+    if (!raw) { localStorage.setItem(key, JSON.stringify(DEFAULT_TASKS)); return DEFAULT_TASKS }
     return JSON.parse(raw)
   } catch { return DEFAULT_TASKS }
 }
 
 export function saveTasks(tasks: Task[]) {
   if (typeof window === 'undefined') return
-  try { localStorage.setItem(TASKS_KEY, JSON.stringify(tasks)) } catch (e) { console.error("localStorage error:", e) }
+  try { localStorage.setItem(getTeamPrefix() + TASKS_KEY, JSON.stringify(tasks)) } catch (e) { console.error("localStorage error:", e) }
 }
 
 export function getMetrics() {

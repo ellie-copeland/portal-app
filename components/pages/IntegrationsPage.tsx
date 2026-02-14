@@ -99,18 +99,25 @@ export default function IntegrationsPage() {
         setIntegrations(integrationsList)
       } catch (error) {
         console.error('Failed to load integrations:', error)
-        // Fall back to empty list
+        // Fall back to localStorage
+        const stored = JSON.parse(localStorage.getItem('integrations') || '[]')
+        const storedMap = new Map(stored.map((i: any) => [i.provider, i]))
+
         setIntegrations(
-          SERVICE_CONFIGS.map(service => ({
-            id: service.id,
-            name: service.name,
-            icon: service.icon,
-            description: INTEGRATION_CONFIGS[service.id]?.description || '',
-            status: 'disconnected',
-            category: service.category as any,
-            eventsToday: 0,
-            lastSync: 'Never',
-          }))
+          SERVICE_CONFIGS.map(service => {
+            const s = storedMap.get(service.id) as any
+            return {
+              id: service.id,
+              name: service.name,
+              icon: service.icon,
+              description: INTEGRATION_CONFIGS[service.id]?.description || '',
+              status: s?.status === 'CONNECTED' ? 'connected' : 'disconnected',
+              category: service.category as any,
+              eventsToday: 0,
+              lastSync: s ? 'Just now' : 'Never',
+              channels: s?.metadata?.channels || [],
+            }
+          })
         )
       } finally {
         setLoading(false)
@@ -143,23 +150,23 @@ export default function IntegrationsPage() {
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
             <div className="flex items-center gap-2">
               <Wifi className="w-4 h-4 text-purple-500" />
-              <p className="text-sm text-purple-600 font-medium">Connected</p>
+              <p className="text-sm text-foreground/70 font-medium">Connected</p>
             </div>
-            <p className="text-2xl font-bold text-purple-700 mt-1">{connectedCount} / {integrations.length}</p>
+            <p className="text-2xl font-bold text-foreground mt-1">{connectedCount} / {integrations.length}</p>
           </div>
           <div className="bg-teal-50 dark:bg-teal-900/20 rounded-xl p-4 border border-teal-100 dark:border-teal-800">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-teal-500" />
-              <p className="text-sm text-teal-600 font-medium">Events Today</p>
+              <p className="text-sm text-foreground/70 font-medium">Events Today</p>
             </div>
-            <p className="text-2xl font-bold text-teal-700 mt-1">{totalEvents.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-foreground mt-1">{totalEvents.toLocaleString()}</p>
           </div>
-          <div className="bg-sky-50 rounded-xl p-4 border border-sky-100">
+          <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl p-4 border border-sky-100 dark:border-sky-800">
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-sky-500" />
-              <p className="text-sm text-sky-600 font-medium">Status</p>
+              <p className="text-sm text-foreground/70 font-medium">Status</p>
             </div>
-            <p className="text-2xl font-bold text-sky-700 mt-1">All Systems Live</p>
+            <p className="text-2xl font-bold text-foreground mt-1">All Systems Live</p>
           </div>
         </div>
       </div>

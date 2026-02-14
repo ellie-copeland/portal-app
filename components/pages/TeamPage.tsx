@@ -187,21 +187,21 @@ export default function TeamPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
             <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Team Size</p>
-            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{teamData._count.members}</p>
+            <p className="text-2xl font-bold text-foreground">{teamData._count.members}</p>
           </div>
           <div className="bg-teal-50 dark:bg-teal-900/20 rounded-xl p-4 border border-teal-100 dark:border-teal-800">
             <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">Agents</p>
-            <p className="text-2xl font-bold text-teal-900 dark:text-teal-100">{teamData._count.agents}</p>
+            <p className="text-2xl font-bold text-foreground">{teamData._count.agents}</p>
           </div>
           <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl p-4 border border-sky-100 dark:border-sky-800">
             <p className="text-xs text-sky-600 dark:text-sky-400 font-medium">Admins</p>
-            <p className="text-2xl font-bold text-sky-900 dark:text-sky-100">
+            <p className="text-2xl font-bold text-foreground">
               {teamData.members.filter(m => m.role === 'ADMIN' || m.role === 'OWNER').length}
             </p>
           </div>
           <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-800">
             <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Invites</p>
-            <p className="text-2xl font-bold text-amber-700 dark:text-amber-100">{pendingInvitations.length}</p>
+            <p className="text-2xl font-bold text-foreground">{pendingInvitations.length}</p>
           </div>
         </div>
       </div>

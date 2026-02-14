@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+// Sanitize HTML to prevent XSS
+const sanitize = (val: string) => val.replace(/<[^>]*>/g, '').trim()
+const safeString = (max: number) => z.string().max(max).transform(sanitize)
+
 // Auth
 export const signupSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -14,7 +18,7 @@ export const signinSchema = z.object({
 
 // Teams
 export const createTeamSchema = z.object({
-  name: z.string().min(1, 'Team name is required').max(100),
+  name: safeString(100).pipe(z.string().min(1, 'Team name is required')),
 })
 
 export const inviteMemberSchema = z.object({
@@ -28,22 +32,23 @@ export const updateMemberRoleSchema = z.object({
 
 // Agents
 export const createAgentSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
+  name: safeString(100).pipe(z.string().min(1)),
+  description: safeString(500).optional(),
   type: z.enum(['MAIN', 'SUB']).default('MAIN'),
-  model: z.string().default('gpt-4'),
+  model: z.string().max(50).default('gpt-4'),
   systemPrompt: z.string().max(10000).optional(),
-  constraints: z.array(z.string()).default([]),
-  role: z.string().max(100).optional(),
+  constraints: z.array(z.string().max(200)).max(20).default([]),
+  role: safeString(100).optional(),
   config: z.record(z.string(), z.any()).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
 })
 
 export const updateAgentSchema = createAgentSchema.partial()
 
 // Tasks
 export const createTaskSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).optional(),
+  title: safeString(200).pipe(z.string().min(1)),
+  description: safeString(2000).optional(),
   status: z.enum(['TODO', 'DOING', 'STUCK', 'DONE']).default('TODO'),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
   agentId: z.string().optional(),
@@ -86,7 +91,7 @@ export const updatePreferencesSchema = z.object({
 
 // Monitoring
 export const createWatchRuleSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: safeString(100).pipe(z.string().min(1)),
   condition: z.string().min(1),
   source: z.string().min(1),
   escalation: z.enum(['auto', 'notify', 'manual']).default('notify'),

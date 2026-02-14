@@ -63,6 +63,8 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
     setCurrentTeam(team)
     localStorage.setItem('activeTeamId', team.id)
     setShowTeamDropdown(false)
+    // Full page reload to refresh all data for the new team
+    window.location.reload()
   }
 
   const handleCreateTeam = async () => {

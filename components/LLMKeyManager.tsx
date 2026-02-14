@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import { Key, Eye, EyeOff, Trash2, Plus, ExternalLink } from 'lucide-react'
 import { authHeaders } from '@/lib/fetch-auth'
 
+type Provider = 'openrouter' | 'anthropic' | 'openai' | 'google' | 'mistral'
+
 interface StoredKey {
   id: string
-  provider: 'openrouter' | 'anthropic' | 'openai'
+  provider: Provider
   keyPrefix: string
   label?: string
   createdAt: string
@@ -18,21 +20,31 @@ interface Toast {
   type: 'success' | 'error'
 }
 
-const PROVIDER_CONFIG = {
-  openrouter: {
-    label: 'OpenRouter',
+const PROVIDER_CONFIG: Record<Provider, { label: string; helpText: string; url: string }> = {
+  openai: {
+    label: 'OpenAI',
     helpText: 'Get your key at',
-    url: 'https://openrouter.ai/keys',
+    url: 'https://platform.openai.com/api-keys',
   },
   anthropic: {
     label: 'Anthropic',
     helpText: 'Get your key at',
     url: 'https://console.anthropic.com',
   },
-  openai: {
-    label: 'OpenAI',
+  google: {
+    label: 'Google AI (Gemini)',
     helpText: 'Get your key at',
-    url: 'https://platform.openai.com/api-keys',
+    url: 'https://aistudio.google.com/apikey',
+  },
+  mistral: {
+    label: 'Mistral AI',
+    helpText: 'Get your key at',
+    url: 'https://console.mistral.ai/api-keys',
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    helpText: 'Access all models with one key at',
+    url: 'https://openrouter.ai/keys',
   },
 }
 
@@ -43,7 +55,7 @@ export default function LLMKeyManager() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   // Form state
-  const [provider, setProvider] = useState<'openrouter' | 'anthropic' | 'openai'>('openrouter')
+  const [provider, setProvider] = useState<Provider>('openai')
   const [keyValue, setKeyValue] = useState('')
   const [label, setLabel] = useState('')
   const [showKey, setShowKey] = useState(false)
@@ -203,12 +215,12 @@ export default function LLMKeyManager() {
               <label className="text-sm font-medium text-foreground block mb-1.5">Provider</label>
               <select
                 value={provider}
-                onChange={e => setProvider(e.target.value as 'openrouter' | 'anthropic' | 'openai')}
+                onChange={e => setProvider(e.target.value as Provider)}
                 className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               >
-                <option value="openrouter">{PROVIDER_CONFIG.openrouter.label}</option>
-                <option value="anthropic">{PROVIDER_CONFIG.anthropic.label}</option>
-                <option value="openai">{PROVIDER_CONFIG.openai.label}</option>
+                {Object.entries(PROVIDER_CONFIG).map(([key, config]) => (
+                  <option key={key} value={key}>{config.label}</option>
+                ))}
               </select>
             </div>
 

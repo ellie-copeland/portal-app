@@ -213,11 +213,8 @@ export default function TemplatesPage() {
     try {
       setLoading(true)
       setError(null)
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
+      const { authHeaders: getAuth } = await import('@/lib/fetch-auth')
+      const headers = getAuth()
       const res = await fetch('/api/templates', { headers })
       if (!res.ok) throw new Error('Failed to fetch templates')
       const data = await res.json()
@@ -242,16 +239,24 @@ export default function TemplatesPage() {
 
   const handleDeploy = async (template: Template) => {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
+      const { authHeaders: getAuth } = await import('@/lib/fetch-auth')
+      const headers = getAuth()
 
+      // Try DB template first, fall back to creating agent directly from template data
       const res = await fetch('/api/agents/v2/from-template', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ templateId: template.id }),
+        body: JSON.stringify({
+          templateId: template.id,
+          // Include template data so the API can create directly if template not in DB
+          templateData: {
+            name: template.name,
+            description: template.description,
+            model: template.model,
+            role: template.role,
+            constraints: template.constraints,
+          },
+        }),
       })
 
       if (!res.ok) throw new Error('Failed to deploy template')
@@ -341,33 +346,27 @@ export default function TemplatesPage() {
               className="bg-card border border-border/80 rounded-xl p-6 shadow-sm hover:shadow-lg hover:border-primary/30 transition-all group"
             >
               <div className="flex items-start gap-4">
-                <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-purple-200 dark:border-purple-700 flex-shrink-0 overflow-hidden">
-                  <img
-                    src={getDicebearAvatarUrl(template.name)}
-                    alt={template.name}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 text-3xl">
+                  {template.avatar || '🤖'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-foreground text-lg mb-1">{template.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
+                  <p className="text-sm text-muted-foreground mb-2">{template.description}</p>
 
                   {/* Persona */}
-                  <div className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg px-3 py-2.5 mb-3">
-                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">
-                      {template.persona}
-                    </p>
-                  </div>
+                  <p className="text-xs text-foreground/60 italic mb-3">
+                    {template.persona}
+                  </p>
 
                   {/* Model + Integrations */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-4">
-                    <span className="text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 px-2 py-1 rounded-lg font-medium border border-teal-100 dark:border-teal-800">
+                    <span className="text-xs bg-muted text-foreground/80 px-2.5 py-1 rounded-md font-medium border border-border">
                       {template.model}
                     </span>
                     {template.integrations.map(int => (
                       <span
                         key={int}
-                        className={`text-xs px-2 py-1 rounded-lg font-medium ${integrationColors[int] || 'bg-gray-100 text-gray-600'}`}
+                        className="text-xs bg-muted text-foreground/70 px-2.5 py-1 rounded-md border border-border"
                       >
                         {int}
                       </span>
@@ -376,7 +375,7 @@ export default function TemplatesPage() {
 
                   {/* Deploy button */}
                   {deployed.has(template.id) ? (
-                    <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+                    <div className="flex items-center gap-2 text-sm text-foreground/70 font-medium">
                       <Sparkles className="w-4 h-4" />
                       Deployed to Agents
                     </div>

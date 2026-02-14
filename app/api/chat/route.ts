@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 const chatSchema = z.object({
   content: z.string().min(1).max(10000),
   agentId: z.string(),
-  conversationId: z.string().optional(),
+  conversationId: z.string().nullable().optional(),
 })
 
 // POST - Simple "chat with an agent" endpoint
@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 })
   }
 
-  const { content, agentId, conversationId } = parsed.data
+  const { content, agentId, conversationId: rawConvId } = parsed.data
+  const conversationId = rawConvId || undefined
 
   // Verify agent access
   const agent = await prisma.agent.findFirst({
@@ -82,12 +83,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ conversationId: convId, userMessage, assistantMessage }, { status: 201 })
   }
 
-  // Load history
+  // Load current conversation history
   const history = await prisma.message.findMany({
     where: { conversationId: convId },
     orderBy: { createdAt: 'asc' },
-    take: 50,
+    take: 20, // Limit current conversation context to save tokens
   })
+
+  // Load brief context from most recent prior conversation only
+  const priorConversations = await prisma.conversation.findMany({
+    where: { agentId, userId: ctx.userId, id: { not: convId } },
+    orderBy: { updatedAt: 'desc' },
+    take: 1,
+    select: { id: true },
+  })
+
+  let priorContext = ''
+  if (priorConversations.length > 0) {
+    const priorMessages = await prisma.message.findMany({
+      where: { conversationId: priorConversations[0].id },
+      orderBy: { createdAt: 'desc' },
+      take: 6, // Just last 3 exchanges from prior conversation
+    })
+    if (priorMessages.length > 0) {
+      const summary = priorMessages.reverse().map(m =>
+        `${m.role === 'USER' ? 'User' : 'You'}: ${m.content.slice(0, 200)}`
+      ).join('\n')
+      priorContext = `\n\n## Previous Conversation History\nYou have memory of past conversations with this user. Here are recent messages from prior sessions:\n${summary}\n\nUse this context naturally — don't mention it unless asked.`
+    }
+  }
 
   const messages: LLMMessage[] = history.map(m => ({
     role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
@@ -97,6 +121,7 @@ export async function POST(req: NextRequest) {
   let systemPrompt = agent.systemPrompt || ''
   if (agent.constraints.length > 0) systemPrompt += `\n\nConstraints:\n${agent.constraints.map(c => `- ${c}`).join('\n')}`
   if (agent.role) systemPrompt = `You are a ${agent.role}.\n\n${systemPrompt}`
+  if (priorContext) systemPrompt += priorContext
 
   try {
     const startTime = Date.now()

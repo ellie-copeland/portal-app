@@ -189,7 +189,7 @@ export default function BillingPage() {
               <p className="text-sm text-purple-100 font-medium">Today&apos;s Spend</p>
             </div>
             <p className="text-3xl font-bold">${todayCost.toFixed(2)}</p>
-            <p className="text-sm text-purple-200 mt-1">↓ 12% vs yesterday</p>
+            <p className="text-sm text-purple-200 mt-1">{todayExecs > 0 ? `${todayExecs} executions today` : 'No executions yet'}</p>
           </div>
           <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl p-5 text-white">
             <div className="flex items-center gap-2 mb-2">
@@ -197,14 +197,14 @@ export default function BillingPage() {
               <p className="text-sm text-teal-100 font-medium">Weekly Spend</p>
             </div>
             <p className="text-3xl font-bold">${weekCost.toFixed(2)}</p>
-            <p className="text-sm text-teal-200 mt-1">On track for $185/mo</p>
+            <p className="text-sm text-teal-200 mt-1">{weekCost > 0 ? `On track for $${(weekCost * 4.3).toFixed(0)}/mo` : 'No spend this week'}</p>
           </div>
           <div className="bg-gradient-to-br from-sky-500 to-sky-600 rounded-xl p-5 text-white">
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-5 h-5 text-sky-200" />
               <p className="text-sm text-sky-100 font-medium">Tokens Used</p>
             </div>
-            <p className="text-3xl font-bold">{(todayTokens / 1000).toFixed(0)}k</p>
+            <p className="text-3xl font-bold">{todayTokens > 0 ? `${(todayTokens / 1000).toFixed(0)}k` : '0'}</p>
             <p className="text-sm text-sky-200 mt-1">{todayExecs} executions</p>
           </div>
           <div className="bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl p-5 text-white">
@@ -212,8 +212,8 @@ export default function BillingPage() {
               <BarChart3 className="w-5 h-5 text-violet-200" />
               <p className="text-sm text-violet-100 font-medium">Avg per Execution</p>
             </div>
-            <p className="text-3xl font-bold">${(todayCost / todayExecs).toFixed(3)}</p>
-            <p className="text-sm text-violet-200 mt-1">{(todayTokens / todayExecs).toFixed(0)} tokens avg</p>
+            <p className="text-3xl font-bold">{todayExecs > 0 ? `$${(todayCost / todayExecs).toFixed(3)}` : '$0.00'}</p>
+            <p className="text-sm text-violet-200 mt-1">{todayExecs > 0 ? `${Math.round(todayTokens / todayExecs)} tokens avg` : 'No data yet'}</p>
           </div>
         </div>
       </div>

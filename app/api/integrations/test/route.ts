@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, isAuthContext } from '@/lib/middleware'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext(req)
   if (!isAuthContext(auth)) return auth

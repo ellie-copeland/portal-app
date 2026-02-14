@@ -17,12 +17,26 @@ export async function getAuthContext(req: NextRequest): Promise<AuthContext | Ne
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Get user's primary team
-  const membership = await prisma.teamMember.findFirst({
-    where: { userId: user.userId },
-    include: { team: true },
-    orderBy: { joinedAt: 'asc' },
-  })
+  // Check for active team header (set by frontend team switcher)
+  const requestedTeamId = req.headers.get('x-team-id')
+
+  let membership
+  if (requestedTeamId) {
+    // Verify user belongs to requested team
+    membership = await prisma.teamMember.findFirst({
+      where: { userId: user.userId, teamId: requestedTeamId },
+      include: { team: true },
+    })
+  }
+
+  // Fallback to first team
+  if (!membership) {
+    membership = await prisma.teamMember.findFirst({
+      where: { userId: user.userId },
+      include: { team: true },
+      orderBy: { joinedAt: 'asc' },
+    })
+  }
 
   if (!membership) {
     return NextResponse.json({ error: 'No team found' }, { status: 403 })

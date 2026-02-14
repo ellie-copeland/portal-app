@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, Clock, Download, Lock, Server, Shield, ShieldCheck, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Check, Clock, Download, Lock, Loader2, Server, Shield, ShieldCheck, X } from 'lucide-react'
+import { authHeaders } from '@/lib/fetch-auth'
 
 interface ComplianceBadge {
   name: string
@@ -35,20 +36,11 @@ const METRICS: SecurityMetric[] = [
   { label: 'Vulnerability Scan', value: 'Last scan: 2 days ago — 0 critical', status: 'good' },
 ]
 
-const AUDIT_LOG = [
-  { timestamp: '2:15 PM', user: 'Sentry Monitor (AI)', action: 'Created Linear ticket #1248', target: 'Linear', risk: 'low' },
-  { timestamp: '1:45 PM', user: 'Brady Miller', action: 'Approved draft response to customer', target: 'Slack #support', risk: 'low' },
-  { timestamp: '12:30 PM', user: 'Sales Assistant (AI)', action: 'Updated deal stage: Acme Corp → Proposal', target: 'HubSpot', risk: 'low' },
-  { timestamp: '11:00 AM', user: 'System', action: 'API key rotation reminder sent', target: 'Admin', risk: 'medium' },
-  { timestamp: '10:23 AM', user: 'Anish Kumar', action: 'Attempted audit log modification — DENIED', target: 'Audit System', risk: 'high' },
-  { timestamp: '10:25 AM', user: 'Anish Kumar', action: 'Repeated audit log modification request — DENIED', target: 'Audit System', risk: 'high' },
-  { timestamp: '9:00 AM', user: 'Morning Briefing (AI)', action: 'Posted daily summary to #general', target: 'Slack', risk: 'low' },
-  { timestamp: '8:30 AM', user: 'System', action: 'Daily security scan completed — 0 issues', target: 'Security', risk: 'low' },
-]
+// Audit log is now fetched from the API (see useEffect below)
 
 const statusConfig = {
-  compliant: { icon: ShieldCheck, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', label: 'Compliant' },
-  'in-progress': { icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', label: 'In Progress' },
+  compliant: { icon: ShieldCheck, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800', label: 'Compliant' },
+  'in-progress': { icon: Clock, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', label: 'In Progress' },
   'not-started': { icon: X, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200', label: 'Not Started' },
 }
 
@@ -58,8 +50,39 @@ const riskColors: Record<string, string> = {
   high: 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400',
 }
 
+interface AuditEntry {
+  id: string
+  timestamp: string
+  user: string
+  action: string
+  target: string
+  risk: string
+}
+
 export default function SecurityPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'audit' | 'compliance'>('overview')
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+  const [loadingAudit, setLoadingAudit] = useState(false)
+
+  useEffect(() => {
+    if (activeTab === 'audit') {
+      const fetchAudit = async () => {
+        setLoadingAudit(true)
+        try {
+          const res = await fetch('/api/audit-logs?limit=50', { headers: authHeaders() })
+          if (res.ok) {
+            const data = await res.json()
+            setAuditLog((data.logs || []).map((l: any) => ({
+              ...l,
+              timestamp: new Date(l.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+            })))
+          }
+        } catch {}
+        setLoadingAudit(false)
+      }
+      fetchAudit()
+    }
+  }, [activeTab])
 
   return (
     <div className="flex flex-col h-full">
@@ -81,30 +104,30 @@ export default function SecurityPage() {
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-emerald-500" />
-              <p className="text-xs text-emerald-600 font-medium">Security Score</p>
+              <p className="text-xs text-foreground/70 font-medium">Security Score</p>
             </div>
-            <p className="text-2xl font-bold text-emerald-700 mt-1">94/100</p>
+            <p className="text-2xl font-bold text-foreground mt-1">94/100</p>
           </div>
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
             <div className="flex items-center gap-2">
               <Lock className="w-4 h-4 text-purple-500" />
-              <p className="text-xs text-purple-600 font-medium">Encryption</p>
+              <p className="text-xs text-foreground/70 font-medium">Encryption</p>
             </div>
-            <p className="text-2xl font-bold text-purple-700 mt-1">AES-256</p>
+            <p className="text-2xl font-bold text-foreground mt-1">AES-256</p>
           </div>
           <div className="bg-teal-50 dark:bg-teal-900/20 rounded-xl p-4 border border-teal-100 dark:border-teal-800">
             <div className="flex items-center gap-2">
               <Server className="w-4 h-4 text-teal-500" />
               <p className="text-xs text-teal-600 font-medium">Uptime</p>
             </div>
-            <p className="text-2xl font-bold text-teal-700 mt-1">99.98%</p>
+            <p className="text-2xl font-bold text-foreground mt-1">99.98%</p>
           </div>
-          <div className="bg-sky-50 rounded-xl p-4 border border-sky-100">
+          <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl p-4 border border-sky-100 dark:border-sky-800">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-sky-500" />
               <p className="text-xs text-sky-600 font-medium">Compliance</p>
             </div>
-            <p className="text-2xl font-bold text-sky-700 mt-1">3/6</p>
+            <p className="text-2xl font-bold text-foreground mt-1">3/6</p>
           </div>
         </div>
 
@@ -147,7 +170,7 @@ export default function SecurityPage() {
             {/* VM Isolation */}
             <div className="bg-card border border-border rounded-xl p-6">
               <h2 className="text-lg font-semibold text-foreground mb-4">Tenant Isolation</h2>
-              <div className="bg-purple-50/50 dark:bg-purple-900/20 rounded-xl p-5 border border-purple-100">
+              <div className="bg-purple-50/50 dark:bg-purple-900/20 rounded-xl p-5 border border-purple-100 dark:border-purple-800">
                 <div className="flex items-center gap-3 mb-3">
                   <Server className="w-6 h-6 text-purple-500" />
                   <div>
@@ -177,9 +200,18 @@ export default function SecurityPage() {
         {activeTab === 'audit' && (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">Today's Activity</h2>
-              <span className="text-xs text-muted-foreground">{AUDIT_LOG.length} events</span>
+              <h2 className="text-sm font-semibold text-foreground">Activity Log</h2>
+              <span className="text-xs text-muted-foreground">{auditLog.length} events</span>
             </div>
+            {loadingAudit ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : auditLog.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                No audit events yet. Actions like creating agents, updating settings, and chat interactions are logged here automatically.
+              </div>
+            ) : (
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
@@ -191,16 +223,16 @@ export default function SecurityPage() {
                 </tr>
               </thead>
               <tbody>
-                {AUDIT_LOG.map((entry, i) => (
-                  <tr key={i} className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${
-                    entry.risk === 'high' ? 'bg-red-50/30' : ''
+                {auditLog.map((entry) => (
+                  <tr key={entry.id} className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${
+                    entry.risk === 'high' ? 'bg-red-50/30 dark:bg-red-900/10' : ''
                   }`}>
                     <td className="px-5 py-3 text-sm text-muted-foreground">{entry.timestamp}</td>
                     <td className="px-5 py-3 text-sm font-medium text-foreground">{entry.user}</td>
                     <td className="px-5 py-3 text-sm text-foreground">{entry.action}</td>
                     <td className="px-5 py-3 text-sm text-muted-foreground">{entry.target}</td>
                     <td className="px-5 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${riskColors[entry.risk]}`}>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${riskColors[entry.risk] || riskColors.low}`}>
                         {entry.risk}
                       </span>
                     </td>
@@ -208,6 +240,7 @@ export default function SecurityPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
         )}
 

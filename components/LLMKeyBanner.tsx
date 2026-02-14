@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Zap } from 'lucide-react'
+import { authHeaders } from '@/lib/fetch-auth'
 
 interface LLMKeyBannerProps {
   onAddKey: () => void
@@ -19,13 +20,14 @@ export default function LLMKeyBanner({ onAddKey }: LLMKeyBannerProps) {
       setDismissed(true)
     }
 
-    // Fetch keys to check if user has any
-    fetchKeys()
+    // Fetch keys to check if user has any (delay slightly to ensure auth token is loaded)
+    const timer = setTimeout(fetchKeys, 500)
+    return () => clearTimeout(timer)
   }, [])
 
   const fetchKeys = async () => {
     try {
-      const res = await fetch('/api/keys')
+      const res = await fetch('/api/keys', { headers: authHeaders() })
       if (res.ok) {
         const data = await res.json()
         setHasKeys(data.keys && data.keys.length > 0)

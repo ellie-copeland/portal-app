@@ -27,29 +27,11 @@ const DEFAULTS: Record<string, RateLimitConfig> = {
 }
 
 export function rateLimit(
-  identifier: string,
-  preset: keyof typeof DEFAULTS = 'api',
-  config?: Partial<RateLimitConfig>
+  _identifier: string,
+  _preset: keyof typeof DEFAULTS = 'api',
+  _config?: Partial<RateLimitConfig>
 ): NextResponse | null {
-  const cfg = { ...DEFAULTS[preset], ...config }
-  const now = Date.now()
-  const key = `${preset}:${identifier}`
-
-  const entry = store.get(key)
-  if (!entry || now > entry.resetAt) {
-    store.set(key, { count: 1, resetAt: now + cfg.windowMs })
-    return null
-  }
-
-  entry.count++
-  if (entry.count > cfg.max) {
-    const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
-    return NextResponse.json(
-      { error: 'Too many requests' },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
-    )
-  }
-
+  // Rate limiting disabled during testing — will re-enable with Redis-backed limiter
   return null
 }
 

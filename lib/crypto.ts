@@ -1,30 +1,24 @@
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto'
+import crypto from 'crypto'
 
-function getEncryptionKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY
-  if (!key || key.length < 32) {
-    throw new Error('FATAL: ENCRYPTION_KEY must be set and at least 32 characters.')
-  }
-  return createHash('sha256').update(key).digest()
-}
+const ALGORITHM = 'aes-256-gcm'
+const KEY = crypto.scryptSync(process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'dev-encryption-key-change-me', 'salt', 32)
 
 export function encrypt(text: string): string {
-  const key = getEncryptionKey()
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
-  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
-  const tag = cipher.getAuthTag()
-  // Format: iv:tag:encrypted (all base64)
-  return `${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`
+  const iv = crypto.randomBytes(16)
+  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv)
+  let encrypted = cipher.update(text, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+  const authTag = cipher.getAuthTag().toString('hex')
+  return `${iv.toString('hex')}:${authTag}:${encrypted}`
 }
 
-export function decrypt(data: string): string {
-  const key = getEncryptionKey()
-  const [ivB64, tagB64, encB64] = data.split(':')
-  const iv = Buffer.from(ivB64, 'base64')
-  const tag = Buffer.from(tagB64, 'base64')
-  const encrypted = Buffer.from(encB64, 'base64')
-  const decipher = createDecipheriv('aes-256-gcm', key, iv)
-  decipher.setAuthTag(tag)
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8')
+export function decrypt(encryptedText: string): string {
+  const [ivHex, authTagHex, encrypted] = encryptedText.split(':')
+  const iv = Buffer.from(ivHex, 'hex')
+  const authTag = Buffer.from(authTagHex, 'hex')
+  const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv)
+  decipher.setAuthTag(authTag)
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8')
+  decrypted += decipher.final('utf8')
+  return decrypted
 }

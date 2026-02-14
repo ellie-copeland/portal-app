@@ -20,6 +20,7 @@ import SetupWizardPage from '@/components/pages/SetupWizardPage'
 import SecurityPage from '@/components/pages/SecurityPage'
 import SettingsPage from '@/components/pages/SettingsPage'
 import TeamPage from '@/components/pages/TeamPage'
+import LandingPage from '@/components/pages/LandingPage'
 
 export type PageType = 'agents' | 'tasks' | 'chat' | 'command-center' | 'executions' | 'integrations' | 'billing' | 'templates' | 'monitoring' | 'supervised' | 'agent-chat' | 'setup' | 'security' | 'settings' | 'team'
 
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [darkMode, setDarkMode] = useState(false)
   const [authed, setAuthed] = useState<boolean | null>(null) // null = checking
   const [user, setUser] = useState<any>(null)
+  const [showAuth, setShowAuth] = useState(false)
 
   // Check for existing auth on mount
   useEffect(() => {
@@ -36,7 +38,6 @@ export default function Dashboard() {
       setAuthed(false)
       return
     }
-    // Validate token by hitting /api/users/me
     fetch('/api/users/me', {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -61,12 +62,14 @@ export default function Dashboard() {
   const handleAuth = (token: string, userData: any) => {
     setUser(userData)
     setAuthed(true)
+    setShowAuth(false)
   }
 
   const handleSignOut = () => {
     localStorage.removeItem('accessToken')
     setAuthed(false)
     setUser(null)
+    setShowAuth(false)
   }
 
   // Loading state
@@ -78,9 +81,12 @@ export default function Dashboard() {
     )
   }
 
-  // Not authenticated — show login/signup
+  // Not authenticated — show landing page or auth
   if (!authed) {
-    return <AuthPage onAuth={handleAuth} />
+    if (showAuth) {
+      return <AuthPage onAuth={handleAuth} />
+    }
+    return <LandingPage onGetStarted={() => setShowAuth(true)} />
   }
 
   const renderPage = () => {

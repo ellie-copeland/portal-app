@@ -10,5 +10,9 @@ export function authHeaders(): Record<string, string> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
+  const teamId = typeof window !== 'undefined' ? localStorage.getItem('activeTeamId') : null
+  if (teamId) {
+    headers['X-Team-Id'] = teamId
+  }
   return headers
 }

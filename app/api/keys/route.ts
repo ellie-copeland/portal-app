@@ -8,7 +8,7 @@ import { z } from 'zod'
 export const dynamic = 'force-dynamic'
 
 const storeKeySchema = z.object({
-  provider: z.enum(['openrouter', 'anthropic', 'openai']),
+  provider: z.enum(['openrouter', 'anthropic', 'openai', 'google', 'mistral']),
   key: z.string().min(10),
   label: z.string().max(100).optional(),
 })

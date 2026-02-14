@@ -159,20 +159,20 @@ export default function SupervisedPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
           <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-800">
-            <p className="text-xs text-amber-600 font-medium">Pending Review</p>
-            <p className="text-2xl font-bold text-amber-700">{pending.length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Pending Review</p>
+            <p className="text-2xl font-bold text-foreground">{pending.length}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
-            <p className="text-xs text-emerald-600 font-medium">Approved Today</p>
-            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{log.filter(l => l.result === 'approved').length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Approved Today</p>
+            <p className="text-2xl font-bold text-foreground">{log.filter(l => l.result === 'approved').length}</p>
           </div>
           <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-100 dark:border-red-800">
-            <p className="text-xs text-red-600 font-medium">Rejected</p>
-            <p className="text-2xl font-bold text-red-900 dark:text-red-100">{log.filter(l => l.result === 'rejected').length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Rejected</p>
+            <p className="text-2xl font-bold text-foreground">{log.filter(l => l.result === 'rejected').length}</p>
           </div>
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
-            <p className="text-xs text-purple-600 font-medium">Auto-handled</p>
-            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{log.filter(l => l.result === 'auto').length}</p>
+            <p className="text-xs text-foreground/70 font-medium">Auto-handled</p>
+            <p className="text-2xl font-bold text-foreground">{log.filter(l => l.result === 'auto').length}</p>
           </div>
         </div>
 
@@ -261,7 +261,7 @@ export default function SupervisedPage() {
                         {isExpanded ? 'Hide reasoning' : 'Show reasoning'}
                       </button>
                       {isExpanded && (
-                        <div className="mt-2 bg-purple-50/50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-100">
+                        <div className="mt-2 bg-purple-50/50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-100 dark:border-purple-800">
                           <p className="text-sm text-foreground">{action.reasoning}</p>
                         </div>
                       )}

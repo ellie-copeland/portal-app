@@ -14,11 +14,22 @@ const getAccessToken = (): string | null => {
   }
 }
 
+const getActiveTeamId = (): string | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    return localStorage.getItem('activeTeamId')
+  } catch {
+    return null
+  }
+}
+
 const getHeaders = (token: string | null = null): HeadersInit => {
   const accessToken = token || getAccessToken()
+  const teamId = getActiveTeamId()
   return {
     'Content-Type': 'application/json',
     ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
+    ...(teamId && { 'X-Team-Id': teamId }),
   }
 }
 
@@ -27,7 +38,7 @@ interface FetchOptions extends RequestInit {
 }
 
 const fetchWithTimeout = async (url: string, options: FetchOptions = {}) => {
-  const { timeout = 10000, ...fetchOptions } = options
+  const { timeout = 30000, ...fetchOptions } = options
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
 
@@ -66,7 +77,9 @@ export const apiClient = {
     })
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`)
+      let detail = ''
+      try { const body = await response.json(); detail = body.error || JSON.stringify(body) } catch {}
+      throw new Error(`API Error: ${response.status}${detail ? ` — ${detail}` : ''}`)
     }
 
     return response.json()

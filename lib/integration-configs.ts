@@ -118,6 +118,10 @@ You'll now see a "Bot User OAuth Token" (starts with xoxb-). This is what we nee
 • You can have the AI monitor without responding — just reading messages
 • Add more channels later anytime
 
+⚠️ Important: You must invite your bot to each channel first!
+In Slack, go to the channel and type: /invite @YourBotName
+Otherwise the bot won't be able to read or send messages there.
+
 Why: This limits what your AI sees. We only give it access to channels you specify.`,
     },
     {
@@ -191,7 +195,7 @@ export const GITHUB_CONFIG: IntegrationConfig = {
 
 Keep this page open — you'll paste the token in the next step.`,
       links: [
-        { label: '→ Open GitHub Tokens', url: 'https://github.com/settings/tokens?type=beta' },
+        { label: '→ Open GitHub Tokens (Classic)', url: 'https://github.com/settings/tokens' },
       ],
     },
     {

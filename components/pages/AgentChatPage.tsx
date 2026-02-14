@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Paperclip, Phone, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
+import { authHeaders } from '@/lib/fetch-auth'
 
 interface Agent {
   id: string
@@ -46,8 +47,11 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
         setAgents(agentsList)
         
         if (agentsList.length > 0) {
-          setSelectedAgent(agentsList[0].name)
-          setSelectedAgentId(agentsList[0].id)
+          // Restore last selected agent or default to first
+          const lastAgentId = typeof window !== 'undefined' ? localStorage.getItem('lastChatAgentId') : null
+          const restoredAgent = lastAgentId ? agentsList.find(a => a.id === lastAgentId) : null
+          const agent = restoredAgent || agentsList[0]
+          handleSelectAgent(agent.name, agent.id)
         }
       } catch (err) {
         console.error('Error fetching agents:', err)
@@ -69,7 +73,7 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
   // Check for API keys on mount
   const checkApiKeys = async () => {
     try {
-      const res = await fetch('/api/keys')
+      const res = await fetch('/api/keys', { headers: authHeaders() })
       if (res.ok) {
         const data = await res.json()
         setApiKeyError(!data.keys || data.keys.length === 0)
@@ -84,12 +88,41 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
     }
   }
 
-  // Update selected agent
-  const handleSelectAgent = (agentName: string, agentId: string) => {
+  // Update selected agent and load conversation history
+  const handleSelectAgent = async (agentName: string, agentId: string) => {
     setSelectedAgent(agentName)
     setSelectedAgentId(agentId)
-    setMessages([]) // Clear messages when switching agents
+    setMessages([])
     setConversationId(null)
+    if (typeof window !== 'undefined') localStorage.setItem('lastChatAgentId', agentId)
+
+    // Try to load most recent conversation for this agent
+    try {
+      const res = await fetch(`/api/conversations?agentId=${agentId}`, { headers: authHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        const convs = data.conversations || []
+        if (convs.length > 0) {
+          const latest = convs[0]
+          setConversationId(latest.id)
+          // Load messages for this conversation
+          const msgRes = await fetch(`/api/conversations/${latest.id}/messages`, { headers: authHeaders() })
+          if (msgRes.ok) {
+            const msgData = await msgRes.json()
+            const history = (msgData.messages || []).map((m: any) => ({
+              id: m.id,
+              role: (m.role?.toLowerCase() || 'user') as 'user' | 'assistant',
+              content: m.content,
+              timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+              agent: m.role === 'assistant' ? agentName : undefined,
+            }))
+            setMessages(history)
+          }
+        }
+      }
+    } catch {
+      // No history available, start fresh
+    }
   }
 
   const handleSend = async () => {
@@ -197,7 +230,7 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
           <p className="text-xs font-medium text-muted-foreground mb-2">Also available via</p>
           <div className="flex gap-2">
             <span className="text-xs bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-lg font-medium">WhatsApp</span>
-            <span className="text-xs bg-sky-50 text-sky-600 px-2 py-1 rounded-lg font-medium">Telegram</span>
+            <span className="text-xs bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 px-2 py-1 rounded-lg font-medium">Telegram</span>
             <span className="text-xs bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-2 py-1 rounded-lg font-medium">Slack</span>
           </div>
         </div>

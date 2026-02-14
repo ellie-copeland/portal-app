@@ -112,10 +112,10 @@ const PLACEHOLDER_EXECUTIONS: Execution[] = [
 ]
 
 const statusConfig = {
-  success: { icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50', label: 'Success' },
-  failed: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', label: 'Failed' },
+  success: { icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20', label: 'Success' },
+  failed: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', label: 'Failed' },
   running: { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-50', label: 'Running' },
-  warning: { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50', label: 'Warning' },
+  warning: { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Warning' },
 }
 
 export default function ExecutionsPage() {
@@ -134,11 +134,8 @@ export default function ExecutionsPage() {
     try {
       setLoading(true)
       setError(null)
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
+      const { authHeaders: getAuth } = await import('@/lib/fetch-auth')
+      const headers = getAuth()
       const res = await fetch('/api/executions', { headers })
       if (!res.ok) throw new Error('Failed to fetch executions')
       const data = await res.json()
@@ -175,20 +172,20 @@ export default function ExecutionsPage() {
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-4 mt-6">
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
-            <p className="text-sm text-purple-600 font-medium">Total Runs</p>
-            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{executions.length}</p>
+            <p className="text-sm text-foreground/70 font-medium">Total Runs</p>
+            <p className="text-2xl font-bold text-foreground">{executions.length}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
-            <p className="text-sm text-emerald-600 font-medium">Success Rate</p>
-            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{successRate}%</p>
+            <p className="text-sm text-foreground/70 font-medium">Success Rate</p>
+            <p className="text-2xl font-bold text-foreground">{successRate}%</p>
           </div>
-          <div className="bg-sky-50 rounded-xl p-4 border border-sky-100">
-            <p className="text-sm text-sky-600 font-medium">Tokens Used</p>
-            <p className="text-2xl font-bold text-sky-900 dark:text-sky-100">{totalTokens.toLocaleString()}</p>
+          <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl p-4 border border-sky-100 dark:border-sky-800">
+            <p className="text-sm text-foreground/70 font-medium">Tokens Used</p>
+            <p className="text-2xl font-bold text-foreground">{totalTokens.toLocaleString()}</p>
           </div>
           <div className="bg-teal-50 dark:bg-teal-900/20 rounded-xl p-4 border border-teal-100 dark:border-teal-800">
-            <p className="text-sm text-teal-600 font-medium">Total Cost</p>
-            <p className="text-2xl font-bold text-teal-900 dark:text-teal-100">${totalCost.toFixed(3)}</p>
+            <p className="text-sm text-foreground/70 font-medium">Total Cost</p>
+            <p className="text-2xl font-bold text-foreground">${totalCost.toFixed(3)}</p>
           </div>
         </div>
       </div>

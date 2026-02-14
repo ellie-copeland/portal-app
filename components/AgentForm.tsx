@@ -23,10 +23,82 @@ interface AgentFormProps {
   onCancel: () => void
 }
 
-const LLM_OPTIONS = ['GPT-4', 'GPT-3.5', 'Claude 3', 'Claude 2', 'Llama 2', 'Mistral']
+// Models grouped by provider — shown based on which API key the user has configured
+const MODEL_OPTIONS: Record<string, { label: string; models: string[] }> = {
+  openai: {
+    label: 'OpenAI',
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'o1', 'o1-mini', 'o1-pro'],
+  },
+  anthropic: {
+    label: 'Anthropic',
+    models: ['claude-opus-4', 'claude-sonnet-4', 'claude-3.5-sonnet', 'claude-3.5-haiku', 'claude-3-opus'],
+  },
+  google: {
+    label: 'Google',
+    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+  },
+  meta: {
+    label: 'Meta (via OpenRouter/Ollama)',
+    models: ['llama-3.3-70b', 'llama-3.1-405b', 'llama-3.1-70b', 'llama-3.1-8b'],
+  },
+  mistral: {
+    label: 'Mistral',
+    models: ['mistral-large', 'mistral-medium', 'mistral-small', 'mixtral-8x22b', 'codestral'],
+  },
+  openrouter: {
+    label: 'OpenRouter (any model)',
+    models: ['openrouter/auto'],
+  },
+}
+
+// Map provider keys to MODEL_OPTIONS keys that should be visible
+const PROVIDER_TO_MODEL_GROUPS: Record<string, string[]> = {
+  openai: ['openai'],
+  anthropic: ['anthropic'],
+  google: ['google'],
+  openrouter: ['openai', 'anthropic', 'google', 'meta', 'mistral', 'openrouter'],
+}
+
 const ROLE_OPTIONS = ['Support Manager', 'FAQ Handler', 'Sales Support', 'Technical Lead', 'Custom Role']
 
 export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps) {
+  const [userProviders, setUserProviders] = useState<string[]>([])
+
+  // Fetch user's configured API key providers
+  useEffect(() => {
+    const fetchKeys = async () => {
+      try {
+        const token = localStorage.getItem('accessToken')
+        const teamId = localStorage.getItem('activeTeamId')
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        if (teamId) headers['X-Team-Id'] = teamId
+        const res = await fetch('/api/keys', { headers })
+        if (res.ok) {
+          const data = await res.json()
+          const providers = (data.keys || []).map((k: { provider: string }) => k.provider)
+          setUserProviders(providers)
+        }
+      } catch {}
+    }
+    fetchKeys()
+  }, [])
+
+  // Filter MODEL_OPTIONS based on user's configured providers
+  const filteredModelOptions = (() => {
+    if (userProviders.length === 0) return MODEL_OPTIONS // show all if no keys yet (or still loading)
+    const visibleGroups = new Set<string>()
+    userProviders.forEach(p => {
+      const groups = PROVIDER_TO_MODEL_GROUPS[p] || [p]
+      groups.forEach(g => visibleGroups.add(g))
+    })
+    const filtered: Record<string, { label: string; models: string[] }> = {}
+    for (const [key, group] of Object.entries(MODEL_OPTIONS)) {
+      if (visibleGroups.has(key)) filtered[key] = group
+    }
+    return Object.keys(filtered).length > 0 ? filtered : MODEL_OPTIONS
+  })()
+
   const [formData, setFormData] = useState({
     name: '',
     type: 'MAIN' as 'MAIN' | 'SUB',
@@ -79,10 +151,11 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const sanitize = (s: string) => s.replace(/<[^>]*>/g, '').trim()
     if (formData.name.trim()) {
       // Map form data to API schema
       onSubmit({
-        name: formData.name,
+        name: sanitize(formData.name).slice(0, 100),
         type: formData.type, // Already uppercase (MAIN/SUB)
         model: formData.model,
         description: formData.description,
@@ -147,8 +220,12 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
               onChange={handleChange}
               className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
             >
-              {LLM_OPTIONS.map(option => (
-                <option key={option} value={option}>{option}</option>
+              {Object.entries(filteredModelOptions).map(([key, group]) => (
+                <optgroup key={key} label={group.label}>
+                  {group.models.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>

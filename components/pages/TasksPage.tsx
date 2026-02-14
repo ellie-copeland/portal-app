@@ -41,11 +41,8 @@ export default function TasksPage() {
     try {
       setLoading(true)
       setError(null)
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
+      const { authHeaders: getAuth } = await import('@/lib/fetch-auth')
+      const headers = getAuth()
       const res = await fetch('/api/tasks', { headers })
       if (!res.ok) throw new Error('Failed to fetch tasks')
       const data = await res.json()
@@ -70,12 +67,8 @@ export default function TasksPage() {
 
   const handleTaskMove = async (taskId: string, newStatus: Task['status']) => {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
-      
+      const { authHeaders: getAuth } = await import('@/lib/fetch-auth')
+      const headers = getAuth()
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
         headers,

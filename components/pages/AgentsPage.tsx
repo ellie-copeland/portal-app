@@ -24,82 +24,100 @@ export default function AgentsPage() {
 
   useEffect(() => {
     fetchAgents()
+    const onTeamChange = () => fetchAgents()
+    window.addEventListener('teamChanged', onTeamChange)
+    return () => window.removeEventListener('teamChanged', onTeamChange)
   }, [])
 
   const fetchAgents = async () => {
     try {
       setLoading(true)
       setError(null)
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
-      const res = await fetch('/api/agents', { headers })
-      if (!res.ok) throw new Error('Failed to fetch agents')
+      const { authHeaders } = await import('@/lib/fetch-auth')
+      const res = await fetch('/api/agents', { headers: authHeaders() })
+      if (!res.ok) throw new Error('API error')
       const data = await res.json()
-      setAgents(data.agents || [])
-    } catch (err) {
-      console.error('Error fetching agents:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load agents')
+      const apiAgents = (data.agents || []).map((a: any) => ({
+        ...a,
+        status: a.status?.toLowerCase() === 'active' ? 'active' : 'inactive',
+        type: a.type?.toLowerCase() || 'sub',
+      }))
+      setAgents(apiAgents)
+      // Also sync localStorage fallback
+      if (apiAgents.length > 0) {
+        const { saveAgents } = await import('@/lib/store')
+        saveAgents(apiAgents)
+      }
+    } catch {
+      // Fallback to localStorage
+      try {
+        const { getAgents } = await import('@/lib/store')
+        setAgents(getAgents())
+      } catch { setAgents([]) }
     } finally {
       setLoading(false)
     }
   }
 
   const handleAddAgent = async (agentData: any) => {
+    const { getAgents, saveAgents } = await import('@/lib/store')
+    const { authHeaders } = await import('@/lib/fetch-auth')
+
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
-
-      let res
       if (editingAgent) {
-        res = await fetch(`/api/agents/${editingAgent.id}`, {
-          method: 'PATCH',
-          headers,
-          body: JSON.stringify(agentData),
-        })
+        const res = await fetch(`/api/agents/${editingAgent.id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(agentData) })
+        if (!res.ok) throw new Error('API failed')
       } else {
-        res = await fetch('/api/agents', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(agentData),
-        })
+        const res = await fetch('/api/agents', { method: 'POST', headers: authHeaders(), body: JSON.stringify(agentData) })
+        if (!res.ok) throw new Error('API failed')
       }
-
-      if (!res.ok) throw new Error('Failed to save agent')
-      
-      setEditingAgent(null)
-      setShowForm(false)
-      await fetchAgents()
-    } catch (err) {
-      console.error('Error saving agent:', err)
-      setError(err instanceof Error ? err.message : 'Failed to save agent')
+    } catch {
+      const all = getAgents()
+      if (editingAgent) {
+        const idx = all.findIndex(a => a.id === editingAgent.id)
+        if (idx >= 0) all[idx] = { ...all[idx], ...agentData }
+      } else {
+        all.push({ id: Date.now().toString(), status: 'inactive', ...agentData })
+      }
+      saveAgents(all)
     }
+
+    setEditingAgent(null)
+    setShowForm(false)
+    await fetchAgents()
+  }
+
+  const handleToggleStatus = async (agent: any) => {
+    const newStatus = agent.status === 'active' ? 'inactive' : 'active'
+    const dbStatus = newStatus.toUpperCase()
+    const { authHeaders } = await import('@/lib/fetch-auth')
+    try {
+      const res = await fetch(`/api/agents/${agent.id}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ status: dbStatus }),
+      })
+      if (!res.ok) throw new Error('API failed')
+    } catch {
+      const { getAgents, saveAgents } = await import('@/lib/store')
+      const all = getAgents()
+      const idx = all.findIndex(a => a.id === agent.id)
+      if (idx >= 0) { all[idx].status = newStatus; saveAgents(all) }
+    }
+    await fetchAgents()
   }
 
   const handleDeleteAgent = async (id: string) => {
+    const { authHeaders } = await import('@/lib/fetch-auth')
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
-      
-      const res = await fetch(`/api/agents/${id}`, {
-        method: 'DELETE',
-        headers,
-      })
-      
-      if (!res.ok) throw new Error('Failed to delete agent')
-      await fetchAgents()
-    } catch (err) {
-      console.error('Error deleting agent:', err)
-      setError(err instanceof Error ? err.message : 'Failed to delete agent')
+      const res = await fetch(`/api/agents/${id}`, { method: 'DELETE', headers: authHeaders() })
+      if (!res.ok) throw new Error('API failed')
+    } catch {
+      const { getAgents, saveAgents } = await import('@/lib/store')
+      const all = getAgents().filter(a => a.id !== id)
+      saveAgents(all)
     }
+    await fetchAgents()
   }
 
   return (
@@ -123,16 +141,16 @@ export default function AgentsPage() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mt-6">
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
-            <p className="text-sm text-purple-600 font-medium">Total Agents</p>
-            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{agents.length}</p>
+            <p className="text-sm text-foreground/70 font-medium">Total Agents</p>
+            <p className="text-2xl font-bold text-foreground">{agents.length}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
-            <p className="text-sm text-emerald-600 font-medium">Active</p>
-            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{agents.filter(a => a.status === 'active').length}</p>
+            <p className="text-sm text-foreground/70 font-medium">Active</p>
+            <p className="text-2xl font-bold text-foreground">{agents.filter(a => a.status === 'active').length}</p>
           </div>
           <div className="bg-teal-50 dark:bg-teal-900/20 rounded-xl p-4 border border-teal-100 dark:border-teal-800">
-            <p className="text-sm text-teal-600 font-medium">Models Used</p>
-            <p className="text-2xl font-bold text-teal-900 dark:text-teal-100">{new Set(agents.map(a => a.llm)).size}</p>
+            <p className="text-sm text-foreground/70 font-medium">Models Used</p>
+            <p className="text-2xl font-bold text-foreground">{new Set(agents.map(a => a.llm)).size}</p>
           </div>
         </div>
       </div>
@@ -193,7 +211,17 @@ export default function AgentsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleToggleStatus(agent)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        agent.status === 'active'
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                          : 'bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground'
+                      }`}
+                    >
+                      {agent.status === 'active' ? 'Active' : 'Activate'}
+                    </button>
                     <button
                       onClick={() => { setEditingAgent(agent); setShowForm(true) }}
                       className="p-1.5 rounded-lg hover:bg-muted transition-colors"
@@ -210,11 +238,15 @@ export default function AgentsPage() {
                 </div>
                 <p className="text-sm text-foreground/70 mb-4">{agent.description}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2 py-1 rounded-lg font-semibold border border-purple-200 dark:border-purple-800">{agent.type}</span>
-                  <span className="text-xs bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 px-2 py-1 rounded-lg font-semibold border border-teal-200 dark:border-teal-800 flex items-center gap-1">
+                  <span className={`text-xs px-2.5 py-1 rounded-md font-medium border ${
+                    agent.type === 'main' 
+                      ? 'bg-purple-600 text-white border-purple-700' 
+                      : 'bg-muted text-foreground/70 border-border'
+                  }`}>{agent.type === 'main' ? 'Main' : 'Sub'}</span>
+                  <span className="text-xs bg-muted text-foreground/70 px-2.5 py-1 rounded-md font-medium border border-border flex items-center gap-1">
                     <Cpu className="w-3 h-3" />{agent.llm}
                   </span>
-                  <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-lg font-medium border border-gray-200 dark:border-gray-700">{agent.role}</span>
+                  <span className="text-xs bg-muted text-foreground/70 px-2.5 py-1 rounded-md font-medium border border-border">{agent.role}</span>
                 </div>
               </div>
             ))}

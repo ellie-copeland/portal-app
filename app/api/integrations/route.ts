@@ -3,6 +3,8 @@ import { getAuthContext, isAuthContext } from '@/lib/middleware'
 import { encrypt } from '@/lib/crypto'
 import { prisma } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext(req)
   if (!isAuthContext(auth)) return auth

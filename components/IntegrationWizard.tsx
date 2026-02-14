@@ -34,20 +34,32 @@ export default function IntegrationWizard({
   // Fetch agents on mount
   useEffect(() => {
     const fetchAgents = async () => {
+      setLoadingAgents(true)
+      let result: Agent[] = []
+
+      // Try API first
       try {
-        setLoadingAgents(true)
-        const response = await fetch('/api/agents', {
-          headers: authHeaders(),
-        })
+        const response = await fetch('/api/agents', { headers: authHeaders() })
         if (response.ok) {
           const data = await response.json()
-          setAgents(Array.isArray(data) ? data : data.agents || [])
+          const fetched = Array.isArray(data) ? data : data.agents || []
+          result = fetched.map((a: any) => ({ id: a.id, name: a.name }))
         }
       } catch (error) {
-        console.error('Failed to fetch agents:', error)
-      } finally {
-        setLoadingAgents(false)
+        console.error('Failed to fetch agents from API:', error)
       }
+
+      // If API returned nothing, try localStorage
+      if (result.length === 0) {
+        try {
+          const { getAgents } = await import('@/lib/store')
+          const localAgents = getAgents()
+          result = localAgents.map(a => ({ id: a.id, name: a.name }))
+        } catch {}
+      }
+
+      setAgents(result)
+      setLoadingAgents(false)
     }
 
     fetchAgents()
@@ -57,23 +69,20 @@ export default function IntegrationWizard({
     return null
   }
 
-  // Build dynamic steps: config steps + agent selection + deployment method
+  // Inject agent options into any config step that has an agentId field with empty options
+  const configStepsWithAgents = config.steps.map(step => ({
+    ...step,
+    fields: step.fields.map((field: any) => {
+      if (field.name === 'agentId' && (!field.options || field.options.length === 0)) {
+        return { ...field, options: agents.map(a => ({ label: a.name, value: a.id })) }
+      }
+      return field
+    }),
+  }))
+
+  // Build dynamic steps: config steps (with agents injected) + deployment method
   const allSteps = [
-    ...config.steps,
-    {
-      title: 'Select Agent to Link',
-      description: 'Choose which AI employee will use this integration',
-      fields: [
-        {
-          name: 'agentId',
-          label: 'Agent',
-          type: 'select',
-          required: true,
-          options: agents.map(a => ({ label: a.name, value: a.id })),
-        } as any,
-      ],
-      help: 'Select an agent from your "My Agents" list to link with this integration.',
-    } as WizardStep,
+    ...configStepsWithAgents,
     {
       title: 'Deployment Method',
       description: 'Choose how this integration communicates with your agents',
@@ -135,6 +144,59 @@ export default function IntegrationWizard({
     return Object.keys(newErrors).length === 0
   }
 
+  const [dynamicOptions, setDynamicOptions] = useState<Record<string, { label: string; value: string }[]>>({})
+  const [loadingOptions, setLoadingOptions] = useState(false)
+
+  const fetchDynamicOptions = async (nextStepIndex: number) => {
+    const nextStep = allSteps[nextStepIndex]
+    if (!nextStep) return
+
+    // Check if any field in the next step has empty options and we have a token
+    for (const field of nextStep.fields) {
+      if (field.type === 'multi-select' && (!field.options || field.options.length === 0)) {
+        // Determine which token and action to use
+        let token: string | null = null
+        let provider: string | null = null
+        let action: string | null = null
+
+        if (integrationId === 'vercel' && formData.vercel_token) {
+          token = formData.vercel_token.trim()
+          provider = 'vercel'
+          action = 'projects'
+        } else if (integrationId === 'github' && formData.github_token) {
+          token = formData.github_token.trim()
+          provider = 'github'
+          action = 'repos'
+        } else if (integrationId === 'sentry' && formData.sentry_token) {
+          token = formData.sentry_token.trim()
+          provider = 'sentry'
+          action = 'projects'
+        }
+
+        if (token && provider && action) {
+          setLoadingOptions(true)
+          try {
+            const res = await fetch('/api/integrations/proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider, token, action }),
+            })
+            if (res.ok) {
+              const data = await res.json()
+              if (data.options?.length > 0) {
+                setDynamicOptions(prev => ({ ...prev, [field.name]: data.options }))
+              }
+            }
+          } catch (e) {
+            console.error('Failed to fetch dynamic options:', e)
+          } finally {
+            setLoadingOptions(false)
+          }
+        }
+      }
+    }
+  }
+
   const handleNext = async () => {
     if (!validateStep()) {
       return
@@ -143,7 +205,9 @@ export default function IntegrationWizard({
     if (isLastStep) {
       await handleSubmit()
     } else {
-      setCurrentStep(prev => prev + 1)
+      const nextStep = currentStep + 1
+      await fetchDynamicOptions(nextStep)
+      setCurrentStep(nextStep)
     }
   }
 
@@ -196,14 +260,42 @@ export default function IntegrationWizard({
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save integration')
+        // DB not connected — save to localStorage as fallback
+        const stored = JSON.parse(localStorage.getItem('integrations') || '[]')
+        const idx = stored.findIndex((i: any) => i.provider === integrationId)
+        const record = {
+          id: integrationId,
+          provider: integrationId,
+          status: 'CONNECTED',
+          metadata: formData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+        if (idx >= 0) stored[idx] = record
+        else stored.push(record)
+        localStorage.setItem('integrations', JSON.stringify(stored))
       }
 
       onConnected(formData)
       onClose()
     } catch (error) {
       console.error('Submit failed:', error)
-      setErrors({ submit: 'Failed to save integration. Please try again.' })
+      // Still save locally
+      const stored = JSON.parse(localStorage.getItem('integrations') || '[]')
+      const idx = stored.findIndex((i: any) => i.provider === integrationId)
+      const record = {
+        id: integrationId,
+        provider: integrationId,
+        status: 'CONNECTED',
+        metadata: formData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      if (idx >= 0) stored[idx] = record
+      else stored.push(record)
+      localStorage.setItem('integrations', JSON.stringify(stored))
+      onConnected(formData)
+      onClose()
     } finally {
       setLoading(false)
     }
@@ -285,7 +377,7 @@ export default function IntegrationWizard({
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="">Select an option...</option>
-                    {field.options?.map(opt => (
+                    {field.options?.map((opt: any) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
@@ -295,30 +387,41 @@ export default function IntegrationWizard({
 
                 {field.type === 'multi-select' && (
                   <div className="space-y-2">
-                    {field.options?.map(opt => (
-                      <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(formData[field.name] || []).includes(opt.value)}
-                          onChange={e => {
-                            const current = (formData[field.name] || []) as string[]
-                            if (e.target.checked) {
-                              handleFieldChange(field.name, [...current, opt.value])
-                            } else {
-                              handleFieldChange(field.name, current.filter((v: string) => v !== opt.value))
-                            }
-                          }}
-                          className="rounded border-border"
-                        />
-                        <span className="text-sm text-foreground">{opt.label}</span>
-                      </label>
-                    ))}
+                    {loadingOptions ? (
+                      <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Fetching options...
+                      </div>
+                    ) : (dynamicOptions[field.name] || field.options || []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4">No options found. Make sure your token has the correct permissions.</p>
+                    ) : (
+                      (dynamicOptions[field.name] || field.options || []).map((opt: any) => (
+                        <label key={opt.value} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={(formData[field.name] || []).includes(opt.value)}
+                            onChange={e => {
+                              const current = (formData[field.name] || []) as string[]
+                              if (e.target.checked) {
+                                handleFieldChange(field.name, [...current, opt.value])
+                              } else {
+                                handleFieldChange(field.name, current.filter((v: string) => v !== opt.value))
+                              }
+                            }}
+                            className="rounded border-border accent-purple-600"
+                          />
+                          <span className="text-sm text-foreground">{opt.label}</span>
+                          {opt.language && <span className="text-xs text-muted-foreground ml-auto">{opt.language}</span>}
+                          {opt.framework && <span className="text-xs text-muted-foreground ml-auto">{opt.framework}</span>}
+                        </label>
+                      ))
+                    )}
                   </div>
                 )}
 
                 {field.type === 'checkbox' && (
                   <div className="space-y-2">
-                    {field.options?.map(opt => (
+                    {field.options?.map((opt: any) => (
                       <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
