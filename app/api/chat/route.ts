@@ -36,6 +36,11 @@ export async function POST(req: NextRequest) {
   })
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
+  // Check if agent is active
+  if (agent.status !== 'ACTIVE') {
+    return NextResponse.json({ error: 'Bot not active. Please activate the agent before sending messages.' }, { status: 403 })
+  }
+
   // Get or create conversation
   let convId = conversationId
   if (!convId) {
