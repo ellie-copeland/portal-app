@@ -191,7 +191,7 @@ export function getAgents(): Agent[] {
 
 export function saveAgents(agents: Agent[]) {
   if (typeof window === 'undefined') return
-  try { localStorage.setItem(AGENTS_KEY, JSON.stringify(agents)) } catch {}
+  try { localStorage.setItem(AGENTS_KEY, JSON.stringify(agents)) } catch (e) { console.error("localStorage error:", e) }
 }
 
 export function getExecutions(): Execution[] {
@@ -240,7 +240,7 @@ export function getTasks(): Task[] {
 
 export function saveTasks(tasks: Task[]) {
   if (typeof window === 'undefined') return
-  try { localStorage.setItem(TASKS_KEY, JSON.stringify(tasks)) } catch {}
+  try { localStorage.setItem(TASKS_KEY, JSON.stringify(tasks)) } catch (e) { console.error("localStorage error:", e) }
 }
 
 export function getMetrics() {

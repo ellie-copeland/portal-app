@@ -36,9 +36,7 @@ export async function POST(req: NextRequest) {
     })
 
     // TODO: Send email via Resend with reset link
-    // For now, log the reset URL (visible in Vercel function logs for admin use)
-    const resetUrl = `${req.nextUrl.origin}/reset-password?token=${token}`
-    console.log(`[PASSWORD RESET] ${normalizedEmail} → ${resetUrl}`)
+    // Reset token stored in DB — will be delivered via email once Resend is configured
 
     return NextResponse.json({ message: 'If that email exists, a reset link has been sent.' })
   } catch (error) {
