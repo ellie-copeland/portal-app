@@ -6,7 +6,8 @@ import { inviteMemberSchema } from '@/lib/validation'
 export const dynamic = 'force-dynamic'
 
 // POST /api/teams/:id/invite — Invite a member to team
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 
@@ -103,7 +104,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 // GET /api/teams/:id/invite — List pending invitations for team
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 

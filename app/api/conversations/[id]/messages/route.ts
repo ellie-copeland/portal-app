@@ -7,7 +7,8 @@ import { callLLM, getUserApiKey, LLMMessage } from '@/lib/llm'
 export const dynamic = 'force-dynamic'
 
 // GET /api/conversations/:id/messages
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // POST /api/conversations/:id/messages — Send message + get LLM response
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 

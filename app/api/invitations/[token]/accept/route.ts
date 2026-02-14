@@ -5,7 +5,8 @@ import { getAuthContext, isAuthContext } from '@/lib/middleware'
 export const dynamic = 'force-dynamic'
 
 // POST /api/invitations/:token/accept — Accept an invitation
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, { params: paramsPromise }: { params: Promise<{ token: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 

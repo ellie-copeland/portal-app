@@ -6,7 +6,8 @@ import { updateTaskSchema } from '@/lib/validation'
 export const dynamic = 'force-dynamic'
 
 // PATCH /api/tasks/:id
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 
@@ -31,7 +32,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/tasks/:id
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 

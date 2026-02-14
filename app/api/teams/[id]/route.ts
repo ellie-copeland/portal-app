@@ -5,7 +5,8 @@ import { getAuthContext, isAuthContext } from '@/lib/middleware'
 export const dynamic = 'force-dynamic'
 
 // GET /api/teams/:id
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 

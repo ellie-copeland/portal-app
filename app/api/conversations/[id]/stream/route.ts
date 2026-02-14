@@ -7,7 +7,8 @@ import { streamLLM, getUserApiKey, LLMMessage } from '@/lib/llm'
 export const dynamic = 'force-dynamic'
 
 // POST /api/conversations/:id/stream — SSE streaming response
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 

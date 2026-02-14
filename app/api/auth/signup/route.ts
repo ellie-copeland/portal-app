@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { hashPassword, createAccessToken, createRefreshToken } from '@/lib/auth'
 import { signupSchema } from '@/lib/validation'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(getClientIp(req), 'auth')
+  if (limited) return limited
+
   try {
     const body = await req.json()
     const parsed = signupSchema.safeParse(body)

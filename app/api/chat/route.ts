@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getAuthContext, isAuthContext } from '@/lib/middleware'
 import { callLLM, getUserApiKey, LLMMessage } from '@/lib/llm'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -14,6 +15,9 @@ const chatSchema = z.object({
 
 // POST - Simple "chat with an agent" endpoint
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(getClientIp(req), 'llm')
+  if (limited) return limited
+
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
 

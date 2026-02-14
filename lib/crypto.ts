@@ -1,7 +1,10 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto'
 
 function getEncryptionKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || ''
+  const key = process.env.ENCRYPTION_KEY
+  if (!key || key.length < 32) {
+    throw new Error('FATAL: ENCRYPTION_KEY must be set and at least 32 characters.')
+  }
   return createHash('sha256').update(key).digest()
 }
 

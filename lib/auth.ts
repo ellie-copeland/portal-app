@@ -2,7 +2,13 @@ import { SignJWT, jwtVerify } from 'jose'
 import bcrypt from 'bcryptjs'
 import { NextRequest, NextResponse } from 'next/server'
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret-change-me')
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET
+  if (!secret || secret.length < 32) {
+    throw new Error('FATAL: JWT_SECRET must be set and at least 32 characters.')
+  }
+  return new TextEncoder().encode(secret)
+}
 const ACCESS_TOKEN_EXPIRY = '15m'
 const REFRESH_TOKEN_EXPIRY = '7d'
 
@@ -19,7 +25,7 @@ export async function createAccessToken(payload: { userId: string; email: string
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(ACCESS_TOKEN_EXPIRY)
-    .sign(JWT_SECRET)
+    .sign(getJwtSecret())
 }
 
 export async function createRefreshToken(payload: { userId: string }): Promise<string> {
@@ -27,12 +33,12 @@ export async function createRefreshToken(payload: { userId: string }): Promise<s
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(REFRESH_TOKEN_EXPIRY)
-    .sign(JWT_SECRET)
+    .sign(getJwtSecret())
 }
 
 export async function verifyToken(token: string): Promise<{ userId: string; email: string; role: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
+    const { payload } = await jwtVerify(token, getJwtSecret())
     return payload as any
   } catch {
     return null
