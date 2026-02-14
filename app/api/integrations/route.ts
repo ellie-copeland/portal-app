@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { provider, config } = body
+    const { provider, config, agentId } = body
 
     if (!provider || !config) {
       return NextResponse.json(
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
         data: {
           status: 'CONNECTED',
           encryptedConfig,
-          metadata: extractMetadata(provider, config),
+          metadata: extractMetadata(provider, config, agentId),
           updatedAt: new Date(),
         },
       })
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
           provider,
           status: 'CONNECTED',
           encryptedConfig,
-          metadata: extractMetadata(provider, config),
+          metadata: extractMetadata(provider, config, agentId),
         },
       })
     }
@@ -97,9 +97,15 @@ export async function POST(req: NextRequest) {
 
 function extractMetadata(
   provider: string,
-  config: Record<string, any>
+  config: Record<string, any>,
+  agentId?: string
 ): Record<string, any> {
   const metadata: Record<string, any> = {}
+
+  // Add agent info
+  if (agentId) {
+    metadata.agentId = agentId
+  }
 
   switch (provider) {
     case 'slack':

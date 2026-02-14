@@ -5,6 +5,11 @@ import { AlertCircle, Check, ExternalLink, Loader2, X } from 'lucide-react'
 import { getIntegrationConfig, IntegrationConfig, WizardStep } from '@/lib/integration-configs'
 import { authHeaders } from '@/lib/fetch-auth'
 
+interface Agent {
+  id: string
+  name: string
+}
+
 interface IntegrationWizardProps {
   integrationId: string
   onClose: () => void
@@ -23,13 +28,56 @@ export default function IntegrationWizard({
   const [loading, setLoading] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [loadingAgents, setLoadingAgents] = useState(false)
+
+  // Fetch agents on mount
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        setLoadingAgents(true)
+        const response = await fetch('/api/agents', {
+          headers: authHeaders(),
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setAgents(Array.isArray(data) ? data : data.agents || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch agents:', error)
+      } finally {
+        setLoadingAgents(false)
+      }
+    }
+
+    fetchAgents()
+  }, [])
 
   if (!config) {
     return null
   }
 
-  const step = config.steps[currentStep]
-  const isLastStep = currentStep === config.steps.length - 1
+  // Build dynamic steps: config steps + agent selection
+  const allSteps = [
+    ...config.steps,
+    {
+      title: 'Select Agent to Link',
+      description: 'Choose which AI employee will use this integration',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'Agent',
+          type: 'select',
+          required: true,
+          options: agents.map(a => ({ label: a.name, value: a.id })),
+        } as any,
+      ],
+      help: 'Select an agent from your "My Agents" list to link with this integration.',
+    } as WizardStep,
+  ]
+
+  const step = allSteps[currentStep]
+  const isLastStep = currentStep === allSteps.length - 1
   const isFirstStep = currentStep === 0
 
   const handleFieldChange = (fieldName: string, value: any) => {
@@ -124,6 +172,7 @@ export default function IntegrationWizard({
         body: JSON.stringify({
           provider: integrationId,
           config: formData,
+          agentId: formData.agentId,
         }),
       })
 
@@ -151,7 +200,7 @@ export default function IntegrationWizard({
             <div>
               <h2 className="text-xl font-semibold text-foreground">{config.name}</h2>
               <p className="text-sm text-muted-foreground">
-                Step {currentStep + 1} of {config.steps.length}
+                Step {currentStep + 1} of {allSteps.length}
               </p>
             </div>
           </div>
@@ -165,7 +214,7 @@ export default function IntegrationWizard({
 
         {/* Progress Bar */}
         <div className="px-6 py-3 bg-muted/50 flex gap-1">
-          {config.steps.map((_, idx) => (
+          {allSteps.map((_, idx) => (
             <div
               key={idx}
               className={`flex-1 h-1 rounded-full transition-colors ${
