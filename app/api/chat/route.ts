@@ -19,15 +19,27 @@ const chatSchema = z.object({
   conversationId: z.string().nullable().optional(),
 })
 
-// Simple web scraper — fetches page HTML and extracts text content
-async function scrapeWebpageExecute({ url }: { url: string }): Promise<{ url: string; title: string; content: string; error?: string }> {
+// Clean Slack-formatted URLs: <http://example.com|example.com> → http://example.com
+function cleanUrl(url: string): string {
+  // Handle Slack mrkdwn format
+  const slackMatch = url.match(/<(https?:\/\/[^|>]+)/)
+  if (slackMatch) return slackMatch[1]
+  // Add protocol if missing
+  if (!url.startsWith('http')) return `https://${url}`
+  return url
+}
+
+// Web scraper with meta tag extraction for SPAs
+async function scrapeWebpageExecute({ url: rawUrl }: { url: string }): Promise<{ url: string; title: string; content: string; error?: string }> {
+  const url = cleanUrl(rawUrl)
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; PortalBot/1.0)',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
-      signal: AbortSignal.timeout(10000),
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15000),
     })
 
     if (!response.ok) {
@@ -40,13 +52,30 @@ async function scrapeWebpageExecute({ url }: { url: string }): Promise<{ url: st
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is)
     const title = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : ''
 
-    // Strip HTML tags, scripts, styles to get text content
+    // Extract meta tags (critical for SPAs that render client-side)
+    const metaParts: string[] = []
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
+    if (descMatch) metaParts.push(`Description: ${descMatch[1]}`)
+    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+    if (ogTitleMatch) metaParts.push(`Title: ${ogTitleMatch[1]}`)
+    const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i)
+    if (ogDescMatch) metaParts.push(`About: ${ogDescMatch[1]}`)
+    // Extract any JSON-LD structured data
+    const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i)
+    if (jsonLdMatch) {
+      try {
+        const ld = JSON.parse(jsonLdMatch[1])
+        if (ld.name) metaParts.push(`Name: ${ld.name}`)
+        if (ld.description) metaParts.push(`Description: ${ld.description}`)
+        if (ld.offers) metaParts.push(`Pricing: ${JSON.stringify(ld.offers)}`)
+      } catch {}
+    }
+
+    // Strip HTML to get text content
     const textContent = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
@@ -55,9 +84,37 @@ async function scrapeWebpageExecute({ url }: { url: string }): Promise<{ url: st
       .replace(/\s+/g, ' ')
       .trim()
 
-    const truncated = textContent.length > 8000
-      ? textContent.slice(0, 8000) + '\n\n[Content truncated...]'
-      : textContent
+    // Combine meta info + body text
+    const metaSection = metaParts.length > 0 ? `## Page Metadata\n${metaParts.join('\n')}\n\n## Page Content\n` : ''
+    const fullContent = metaSection + textContent
+
+    const truncated = fullContent.length > 8000
+      ? fullContent.slice(0, 8000) + '\n\n[Content truncated...]'
+      : fullContent
+
+    // If content is very short (SPA with no server-rendered content), also try fetching subpages
+    if (textContent.length < 200 && metaParts.length > 0) {
+      // Try /pricing page
+      try {
+        const pricingRes = await fetch(`${url.replace(/\/$/, '')}/pricing`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+          redirect: 'follow',
+          signal: AbortSignal.timeout(10000),
+        })
+        if (pricingRes.ok) {
+          const pricingHtml = await pricingRes.text()
+          const pricingText = pricingHtml
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+          if (pricingText.length > 100) {
+            return { url, title, content: truncated + `\n\n## Pricing Page\n${pricingText.slice(0, 4000)}` }
+          }
+        }
+      } catch {}
+    }
 
     return { url, title, content: truncated }
   } catch (err) {
