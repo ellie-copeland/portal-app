@@ -1,0 +1,501 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ============================================
+// AUTH & USERS
+// ============================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String?
+  avatarUrl     String?
+  role          UserRole @default(MEMBER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  teamMembers   TeamMember[]
+  apiKeys       ApiKey[]
+  llmKeys       UserApiKey[]
+  agents        Agent[]
+  conversations Conversation[]
+  executions    Execution[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model UserApiKey {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String   // "openrouter", "anthropic", "openai"
+  keyHash      String
+  keyPrefix    String
+  encryptedKey String   @db.Text
+  label        String?
+  lastUsed     DateTime?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("user_api_keys")
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  keyHash   String   @unique
+  prefix    String   // First 8 chars for identification
+  scopes    String[] @default(["read"])
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// ============================================
+// TEAMS
+// ============================================
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      TeamPlan @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members      TeamMember[]
+  invitations  Invitation[]
+  agents       Agent[]
+  integrations Integration[]
+  tasks        Task[]
+  executions   Execution[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id     String         @id @default(cuid())
+  userId String
+  teamId String
+  role   TeamMemberRole @default(MEMBER)
+  joinedAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+enum TeamPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum TeamMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// ============================================
+// INVITATIONS
+// ============================================
+
+model Invitation {
+  id        String   @id @default(cuid())
+  teamId    String
+  email     String
+  role      TeamMemberRole @default(MEMBER)
+  token     String   @unique @default(cuid())
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime @default(dbgenerated("now() + interval '7 days'"))
+  createdAt DateTime @default(now())
+  acceptedAt DateTime?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, email])
+  @@index([token])
+  @@index([email])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+// ============================================
+// AGENTS
+// ============================================
+
+model Agent {
+  id            String      @id @default(cuid())
+  teamId        String
+  createdById   String
+  name          String
+  description   String?
+  type          AgentType   @default(MAIN)
+  status        AgentStatus @default(INACTIVE)
+  model         String      @default("gpt-4")
+  systemPrompt  String?     @db.Text
+  constraints   String[]    @default([])
+  role          String?
+  config        Json?       // Flexible config (temperature, max_tokens, etc.)
+  deployedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  team          Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy     User          @relation(fields: [createdById], references: [id])
+  executions    Execution[]
+  conversations Conversation[]
+  tasks         Task[]
+  supervisedActions SupervisedAction[]
+
+  @@index([teamId])
+  @@map("agents")
+}
+
+model AgentTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  description  String
+  category     String   // Engineering, Sales, DevOps, Productivity, Support, Marketing
+  model        String   @default("gpt-4")
+  systemPrompt String?  @db.Text
+  constraints  String[] @default([])
+  role         String?
+  config       Json?
+  integrations String[] @default([]) // Required integrations
+  icon         String?
+  createdAt    DateTime @default(now())
+
+  @@map("agent_templates")
+}
+
+enum AgentType {
+  MAIN
+  SUB
+}
+
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  DEPLOYING
+  ERROR
+}
+
+// ============================================
+// EXECUTIONS
+// ============================================
+
+model Execution {
+  id          String          @id @default(cuid())
+  agentId     String
+  teamId      String
+  userId      String?
+  trigger     String          // "Slack mention", "Webhook", "Scheduled", "Manual"
+  status      ExecutionStatus @default(RUNNING)
+  input       String?         @db.Text
+  output      String?         @db.Text
+  error       String?         @db.Text
+  tokensUsed  Int             @default(0)
+  cost        Float           @default(0)
+  model       String?
+  duration    Int?            // milliseconds
+  metadata    Json?
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  // Relations
+  agent Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user  User?  @relation(fields: [userId], references: [id])
+  logs  ExecutionLog[]
+
+  @@index([agentId])
+  @@index([teamId])
+  @@index([startedAt])
+  @@map("executions")
+}
+
+model ExecutionLog {
+  id          String   @id @default(cuid())
+  executionId String
+  level       String   @default("info") // info, warn, error, debug
+  message     String   @db.Text
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@map("execution_logs")
+}
+
+enum ExecutionStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// ============================================
+// CONVERSATIONS & MESSAGES
+// ============================================
+
+model Conversation {
+  id        String   @id @default(cuid())
+  agentId   String
+  userId    String
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  agent    Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([agentId])
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String   @db.Text
+  tokensUsed     Int?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ============================================
+// TASKS (KANBAN)
+// ============================================
+
+model Task {
+  id            String       @id @default(cuid())
+  teamId        String
+  agentId       String?
+  title         String
+  description   String?      @db.Text
+  status        TaskStatus   @default(TODO)
+  priority      TaskPriority @default(MEDIUM)
+  recurring     String       @default("none") // none, daily, weekly, monthly, yearly
+  scheduled     Boolean      @default(false)
+  dueDate       DateTime?
+  position      Int          @default(0) // For ordering within a column
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relations
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  agent Agent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([teamId])
+  @@index([status])
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  DOING
+  STUCK
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============================================
+// INTEGRATIONS
+// ============================================
+
+model Integration {
+  id           String            @id @default(cuid())
+  teamId       String
+  provider     String            // slack, github, hubspot, sentry, etc.
+  status       IntegrationStatus @default(DISCONNECTED)
+  accessToken  String?           @db.Text // Encrypted
+  refreshToken String?           @db.Text // Encrypted
+  tokenExpiry  DateTime?
+  config       Json?
+  metadata     Json?             // Provider-specific data (workspace name, etc.)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, provider])
+  @@map("integrations")
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  REFRESHING
+}
+
+// ============================================
+// MONITORING & ALERTS
+// ============================================
+
+model Alert {
+  id         String      @id @default(cuid())
+  teamId     String
+  agentId    String?
+  severity   AlertSeverity
+  source     String      // "sentry", "slack", "github", etc.
+  title      String
+  message    String      @db.Text
+  status     AlertStatus @default(NEW)
+  metadata   Json?
+  resolvedAt DateTime?
+  createdAt  DateTime    @default(now())
+
+  @@index([teamId])
+  @@index([severity])
+  @@index([status])
+  @@map("alerts")
+}
+
+model WatchRule {
+  id          String   @id @default(cuid())
+  teamId      String
+  name        String
+  condition   String   // e.g. "error_rate > 5%", "response_time > 2s"
+  source      String   // Integration provider
+  escalation  String   @default("notify") // auto, notify, manual
+  enabled     Boolean  @default(true)
+  config      Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("watch_rules")
+}
+
+enum AlertSeverity {
+  CRITICAL
+  WARNING
+  INFO
+}
+
+enum AlertStatus {
+  NEW
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+// ============================================
+// SUPERVISED AI
+// ============================================
+
+model SupervisedAction {
+  id          String               @id @default(cuid())
+  agentId     String
+  type        String               // "email_draft", "slack_reply", "pr_comment", etc.
+  status      SupervisedStatus     @default(PENDING)
+  draft       String               @db.Text
+  finalOutput String?              @db.Text
+  confidence  Float?
+  reasoning   String?              @db.Text
+  context     Json?
+  reviewedAt  DateTime?
+  createdAt   DateTime             @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([status])
+  @@map("supervised_actions")
+}
+
+enum SupervisedStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EDITED
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  teamId    String?
+  action    String   // "agent.create", "execution.run", "settings.update", etc.
+  resource  String?  // Resource type
+  resourceId String? // Resource ID
+  details   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([teamId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
