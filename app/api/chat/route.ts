@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getAuthContext, isAuthContext } from '@/lib/middleware'
-import { callLLM, getUserApiKey, LLMMessage } from '@/lib/llm'
+import { getUserApiKey } from '@/lib/llm'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { streamText, tool, stepCountIs, zodSchema } from 'ai'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 const chatSchema = z.object({
   content: z.string().min(1).max(10000),
@@ -13,7 +16,63 @@ const chatSchema = z.object({
   conversationId: z.string().nullable().optional(),
 })
 
-// POST - Simple "chat with an agent" endpoint
+// Firecrawl scrape tool implementation
+async function scrapeWebpageExecute({ url }: { url: string }): Promise<{ url: string; title: string; content: string; error?: string }> {
+  const apiKey = process.env.FIRECRAWL_API_KEY
+  if (!apiKey) {
+    return { url, title: '', content: '', error: 'Firecrawl API key not configured' }
+  }
+
+  try {
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown'],
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      return { url, title: '', content: '', error: `Firecrawl error (${response.status}): ${error}` }
+    }
+
+    const data = await response.json()
+    const markdown = data.data?.markdown || ''
+    const truncated = markdown.length > 8000
+      ? markdown.slice(0, 8000) + '\n\n[Content truncated...]'
+      : markdown
+
+    return {
+      url,
+      title: data.data?.metadata?.title || '',
+      content: truncated,
+    }
+  } catch (err) {
+    return { url, title: '', content: '', error: `Failed to scrape: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+// Map model names to provider configs
+function getProviderForModel(model: string, apiKey: string) {
+  // For OpenRouter (default), use OpenAI-compatible with OpenRouter base URL
+  const openrouter = createOpenAICompatible({
+    name: 'openrouter',
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey,
+    headers: {
+      'HTTP-Referer': 'https://portal-app-gamma.vercel.app',
+    },
+  })
+
+  // OpenRouter accepts model IDs directly
+  return openrouter(model)
+}
+
 export async function POST(req: NextRequest) {
   const limited = rateLimit(getClientIp(req), 'llm')
   if (limited) return limited
@@ -36,7 +95,6 @@ export async function POST(req: NextRequest) {
   })
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
-  // Check if agent is active
   if (agent.status !== 'ACTIVE') {
     return NextResponse.json({ error: 'Bot not active. Please activate the agent before sending messages.' }, { status: 403 })
   }
@@ -60,7 +118,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Save user message
-  const userMessage = await prisma.message.create({
+  await prisma.message.create({
     data: { conversationId: convId, role: 'USER', content },
   })
 
@@ -78,24 +136,27 @@ export async function POST(req: NextRequest) {
 
   const apiKey = await getUserApiKey(ctx.userId, provider)
   if (!apiKey) {
-    const assistantMessage = await prisma.message.create({
+    await prisma.message.create({
       data: {
         conversationId: convId,
         role: 'ASSISTANT',
         content: `⚠️ No API key configured for provider "${provider}". Add one via POST /api/keys.`,
       },
     })
-    return NextResponse.json({ conversationId: convId, userMessage, assistantMessage }, { status: 201 })
+    return NextResponse.json({
+      error: `No API key for "${provider}"`,
+      conversationId: convId,
+    }, { status: 400 })
   }
 
-  // Load current conversation history
+  // Load conversation history
   const history = await prisma.message.findMany({
     where: { conversationId: convId },
     orderBy: { createdAt: 'asc' },
-    take: 20, // Limit current conversation context to save tokens
+    take: 20,
   })
 
-  // Load brief context from most recent prior conversation only
+  // Load brief context from most recent prior conversation
   const priorConversations = await prisma.conversation.findMany({
     where: { agentId, userId: ctx.userId, id: { not: convId } },
     orderBy: { updatedAt: 'desc' },
@@ -108,69 +169,90 @@ export async function POST(req: NextRequest) {
     const priorMessages = await prisma.message.findMany({
       where: { conversationId: priorConversations[0].id },
       orderBy: { createdAt: 'desc' },
-      take: 6, // Just last 3 exchanges from prior conversation
+      take: 6,
     })
     if (priorMessages.length > 0) {
       const summary = priorMessages.reverse().map(m =>
         `${m.role === 'USER' ? 'User' : 'You'}: ${m.content.slice(0, 200)}`
       ).join('\n')
-      priorContext = `\n\n## Previous Conversation History\nYou have memory of past conversations with this user. Here are recent messages from prior sessions:\n${summary}\n\nUse this context naturally — don't mention it unless asked.`
+      priorContext = `\n\n## Previous Conversation History\n${summary}\n\nUse this context naturally — don't mention it unless asked.`
     }
   }
 
-  const messages: LLMMessage[] = history.map(m => ({
-    role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }))
-
+  // Build system prompt
   let systemPrompt = agent.systemPrompt || ''
   if (agent.constraints.length > 0) systemPrompt += `\n\nConstraints:\n${agent.constraints.map(c => `- ${c}`).join('\n')}`
   if (agent.role) systemPrompt = `You are a ${agent.role}.\n\n${systemPrompt}`
   if (priorContext) systemPrompt += priorContext
 
+  // Build messages for AI SDK
+  const messages = history.map(m => ({
+    role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
+    content: m.content,
+  }))
+
+  const startTime = Date.now()
+  const modelInstance = getProviderForModel(model, apiKey)
+
   try {
-    const startTime = Date.now()
-    const llmResponse = await callLLM({
-      model,
+    const result = streamText({
+      model: modelInstance,
+      system: systemPrompt || undefined,
       messages,
-      systemPrompt: systemPrompt || undefined,
       temperature: (config.temperature as number) ?? 0.7,
-      max_tokens: (config.max_tokens as number) ?? 4096,
-    }, apiKey)
+      maxOutputTokens: (config.max_tokens as number) ?? 4096,
+      tools: {
+        scrapeWebpage: tool({
+          description: 'Scrape a webpage and extract its content as markdown. Use this when you need to read or analyze web page content.',
+          inputSchema: zodSchema(z.object({
+            url: z.string().describe('The URL of the webpage to scrape'),
+          })),
+          execute: scrapeWebpageExecute,
+        }),
+      },
+      stopWhen: stepCountIs(3), // Allow up to 3 tool-calling rounds
+      async onFinish({ text, totalUsage }) {
+        // Save assistant message to DB
+        const tokensUsed = (totalUsage?.inputTokens || 0) + (totalUsage?.outputTokens || 0)
+        await prisma.message.create({
+          data: {
+            conversationId: convId!,
+            role: 'ASSISTANT',
+            content: text,
+            tokensUsed,
+            metadata: { model },
+          },
+        })
 
-    const assistantMessage = await prisma.message.create({
-      data: {
-        conversationId: convId,
-        role: 'ASSISTANT',
-        content: llmResponse.content,
-        tokensUsed: llmResponse.tokensUsed,
-        metadata: { model: llmResponse.model, cost: llmResponse.cost },
+        await prisma.execution.create({
+          data: {
+            agentId: agent.id,
+            teamId: ctx.teamId,
+            userId: ctx.userId,
+            trigger: 'Chat',
+            status: 'SUCCESS',
+            input: content,
+            output: text,
+            tokensUsed,
+            cost: 0,
+            model,
+            duration: Date.now() - startTime,
+            completedAt: new Date(),
+          },
+        })
       },
     })
 
-    await prisma.execution.create({
-      data: {
-        agentId: agent.id,
-        teamId: ctx.teamId,
-        userId: ctx.userId,
-        trigger: 'Chat',
-        status: 'SUCCESS',
-        input: content,
-        output: llmResponse.content,
-        tokensUsed: llmResponse.tokensUsed,
-        cost: llmResponse.cost,
-        model: llmResponse.model,
-        duration: Date.now() - startTime,
-        completedAt: new Date(),
+    return result.toTextStreamResponse({
+      headers: {
+        'X-Conversation-Id': convId!,
       },
     })
-
-    return NextResponse.json({ conversationId: convId, userMessage, assistantMessage }, { status: 201 })
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-    const assistantMessage = await prisma.message.create({
-      data: { conversationId: convId, role: 'ASSISTANT', content: `❌ Error: ${errorMsg}` },
+    await prisma.message.create({
+      data: { conversationId: convId!, role: 'ASSISTANT', content: `❌ Error: ${errorMsg}` },
     })
-    return NextResponse.json({ conversationId: convId, userMessage, assistantMessage }, { status: 201 })
+    return NextResponse.json({ error: errorMsg, conversationId: convId }, { status: 500 })
   }
 }

@@ -11,8 +11,7 @@ export type MarkdownRendererProps = {
 
 export function MarkdownRenderer({ children, className }: MarkdownRendererProps) {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+    <div
       className={cn(
         "prose prose-sm dark:prose-invert max-w-none break-words",
         "prose-p:leading-relaxed prose-pre:p-0",
@@ -21,28 +20,10 @@ export function MarkdownRenderer({ children, className }: MarkdownRendererProps)
         "prose-a:text-primary prose-a:underline",
         className
       )}
-      components={{
-        pre({ children }) {
-          return (
-            <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-sm">
-              {children}
-            </pre>
-          )
-        },
-        code({ children, className: codeClassName }) {
-          const isInline = !codeClassName
-          if (isInline) {
-            return (
-              <code className="rounded bg-muted px-1 py-0.5 text-sm">
-                {children}
-              </code>
-            )
-          }
-          return <code className={codeClassName}>{children}</code>
-        },
-      }}
     >
-      {children}
-    </ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {children}
+      </ReactMarkdown>
+    </div>
   )
 }
