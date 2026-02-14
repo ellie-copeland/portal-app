@@ -15,7 +15,7 @@ interface APIMessage {
   mentions?: string[]
 }
 
-interface Message {
+interface ChatMsg {
   id: string
   author: string
   content: string
@@ -27,7 +27,7 @@ interface Thread {
   id: string
   title: string
   participants?: string[]
-  messages?: Message[]
+  messages?: ChatMsg[]
   lastMessageTime?: string
   unread?: number
   agent?: { name: string }
@@ -38,14 +38,14 @@ interface APIConversation {
   id: string
   title: string
   agent?: { name: string }
-  messages?: Message[]
+  messages?: ChatMsg[]
   _count?: { messages: number }
 }
 
 export default function ChatPage() {
   const [threads, setThreads] = useState<Thread[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
-  const [selectedThreadMessages, setSelectedThreadMessages] = useState<Message[]>([])
+  const [selectedThreadMessages, setSelectedThreadMessages] = useState<ChatMsg[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -98,7 +98,7 @@ export default function ChatPage() {
         const apiMessages = response.messages || []
         
         // Transform API messages to ChatThread format
-        const transformedMessages: Message[] = apiMessages.map(msg => ({
+        const transformedMessages: ChatMsg[] = apiMessages.map(msg => ({
           id: msg.id,
           author: msg.author || (msg.role === 'USER' ? 'You' : msg.role === 'ASSISTANT' ? 'Assistant' : 'Unknown'),
           content: msg.content,
@@ -135,7 +135,7 @@ export default function ChatPage() {
       })
 
       // Add new message to local state
-      const newMessage: Message = {
+      const newMessage: ChatMsg = {
         id: Date.now().toString(),
         author: 'You',
         content,
