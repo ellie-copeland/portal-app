@@ -144,28 +144,54 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
       const messageInput = input
       setInput('')
 
-      // Send message to API
-      const response = await apiClient.post<any>('/api/chat', {
-        content: messageInput,
-        agentId: selectedAgentId,
-        conversationId: conversationId,
+      // Send message to API (streaming response)
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          content: messageInput,
+          agentId: selectedAgentId,
+          conversationId: conversationId,
+        }),
       })
 
-      // Update conversation ID if new
-      if (response.conversationId && !conversationId) {
-        setConversationId(response.conversationId)
+      // Update conversation ID from header
+      const newConvId = res.headers.get('X-Conversation-Id')
+      if (newConvId && !conversationId) {
+        setConversationId(newConvId)
       }
 
-      // Add assistant message
-      if (response.assistantMessage) {
-        const agentMsg: ChatMessage = {
-          id: response.assistantMessage.id,
-          role: 'assistant',
-          content: response.assistantMessage.content,
-          timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-          agent: selectedAgent || undefined,
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Request failed' }))
+        throw new Error(errData.error || `HTTP ${res.status}`)
+      }
+
+      // Read streaming response
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder()
+      const agentMsgId = Date.now().toString() + '-assistant'
+
+      // Add placeholder assistant message
+      const agentMsg: ChatMessage = {
+        id: agentMsgId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        agent: selectedAgent || undefined,
+      }
+      setMessages(prev => [...prev, agentMsg])
+
+      if (reader) {
+        let fullText = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value, { stream: true })
+          fullText += chunk
+          setMessages(prev => prev.map(m =>
+            m.id === agentMsgId ? { ...m, content: fullText } : m
+          ))
         }
-        setMessages(prev => [...prev, agentMsg])
       }
     } catch (err) {
       console.error('Error sending message:', err)
