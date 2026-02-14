@@ -311,11 +311,47 @@ export async function POST(req: NextRequest) {
       maxOutputTokens: (config.max_tokens as number) ?? 4096,
       tools: {
         scrapeWebpage: tool({
-          description: 'Scrape a webpage and extract its content as markdown. Use this when you need to read or analyze web page content.',
+          description: 'Fetch a specific webpage URL and extract its content. Best for known URLs. For JS-heavy sites (SPAs), content may be limited to meta tags.',
           inputSchema: zodSchema(z.object({
             url: z.string().describe('The URL of the webpage to scrape'),
           })),
           execute: scrapeWebpageExecute,
+        }),
+        searchWeb: tool({
+          description: 'Search the web for information. Use this when you need to find pricing, features, reviews, or any information that might not be on a single page. Returns search result snippets.',
+          inputSchema: zodSchema(z.object({
+            query: z.string().describe('The search query'),
+          })),
+          execute: async ({ query }: { query: string }) => {
+            try {
+              const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                },
+                signal: AbortSignal.timeout(10000),
+              })
+              if (!res.ok) return { query, results: [], error: `Search failed: HTTP ${res.status}` }
+              const html = await res.text()
+              // Extract result snippets from DuckDuckGo HTML
+              const results: { title: string; snippet: string; url: string }[] = []
+              const resultBlocks = html.match(/<div class="result[^"]*"[^>]*>[\s\S]*?<\/div>\s*<\/div>/g) || []
+              for (const block of resultBlocks.slice(0, 8)) {
+                const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*>(.*?)<\/a>/s)
+                const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/s)
+                const urlMatch = block.match(/<a[^>]*class="result__url"[^>]*href="([^"]*)"/)
+                if (titleMatch || snippetMatch) {
+                  results.push({
+                    title: (titleMatch?.[1] || '').replace(/<[^>]+>/g, '').trim(),
+                    snippet: (snippetMatch?.[1] || '').replace(/<[^>]+>/g, '').trim(),
+                    url: (urlMatch?.[1] || '').trim(),
+                  })
+                }
+              }
+              return { query, results }
+            } catch (err) {
+              return { query, results: [], error: `Search failed: ${err instanceof Error ? err.message : String(err)}` }
+            }
+          },
         }),
       },
       stopWhen: stepCountIs(3), // Allow up to 3 tool-calling rounds
