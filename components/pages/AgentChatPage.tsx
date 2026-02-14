@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Paperclip, Phone, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
+import { Send, Bot, User, Paperclip, Phone, Sparkles, AlertCircle, Loader2, Plus } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { authHeaders } from '@/lib/fetch-auth'
 
@@ -279,6 +279,18 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (selectedAgentId && selectedAgent) {
+                  setConversationId(null)
+                  setMessages([])
+                }
+              }}
+              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              title="New conversation"
+            >
+              <Plus className="w-4 h-4 text-muted-foreground" />
+            </button>
             <button className="p-2 rounded-lg hover:bg-muted transition-colors" title="Voice call">
               <Phone className="w-4 h-4 text-muted-foreground" />
             </button>

@@ -194,12 +194,18 @@ export async function POST(req: NextRequest) {
     }, { status: 400 })
   }
 
-  // Load conversation history
-  const history = await prisma.message.findMany({
+  // Load conversation history (filter out error/system messages)
+  const rawHistory = await prisma.message.findMany({
     where: { conversationId: convId },
     orderBy: { createdAt: 'asc' },
-    take: 20,
+    take: 30,
   })
+  const history = rawHistory.filter(m =>
+    m.content &&
+    m.content.trim().length > 0 &&
+    !m.content.startsWith('❌') &&
+    !m.content.startsWith('⚠️')
+  ).slice(-20)
 
   // Load brief context from most recent prior conversation
   const priorConversations = await prisma.conversation.findMany({
