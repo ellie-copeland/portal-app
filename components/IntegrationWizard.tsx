@@ -57,7 +57,7 @@ export default function IntegrationWizard({
     return null
   }
 
-  // Build dynamic steps: config steps + agent selection
+  // Build dynamic steps: config steps + agent selection + deployment method
   const allSteps = [
     ...config.steps,
     {
@@ -73,6 +73,24 @@ export default function IntegrationWizard({
         } as any,
       ],
       help: 'Select an agent from your "My Agents" list to link with this integration.',
+    } as WizardStep,
+    {
+      title: 'Deployment Method',
+      description: 'Choose how this integration communicates with your agents',
+      fields: [
+        {
+          name: 'deploymentMethod',
+          label: 'Deployment Method',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'Webhook URL - Integration calls our endpoint', value: 'webhook' },
+            { label: 'Polling - Agent checks integration periodically', value: 'polling' },
+            { label: 'Real-time - WebSocket/streaming connection', value: 'realtime' },
+          ],
+        } as any,
+      ],
+      help: 'Webhook: Best for events. Polling: Better for APIs that don\'t support webhooks. Real-time: For live data streams.',
     } as WizardStep,
   ]
 
@@ -173,6 +191,7 @@ export default function IntegrationWizard({
           provider: integrationId,
           config: formData,
           agentId: formData.agentId,
+          deploymentMethod: formData.deploymentMethod,
         }),
       })
 
