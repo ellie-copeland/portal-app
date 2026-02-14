@@ -56,15 +56,15 @@ export default function AgentsPage() {
         <div className="grid grid-cols-3 gap-4 mt-6">
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
             <p className="text-sm text-purple-600 font-medium">Total Agents</p>
-            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{agents.length}</p>
+            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{agents.length}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
             <p className="text-sm text-emerald-600 font-medium">Active</p>
-            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{agents.filter(a => a.status === 'active').length}</p>
+            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{agents.filter(a => a.status === 'active').length}</p>
           </div>
           <div className="bg-teal-50 dark:bg-teal-900/20 rounded-xl p-4 border border-teal-100 dark:border-teal-800">
             <p className="text-sm text-teal-600 font-medium">Models Used</p>
-            <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{new Set(agents.map(a => a.llm)).size}</p>
+            <p className="text-2xl font-bold text-teal-900 dark:text-teal-100">{new Set(agents.map(a => a.llm)).size}</p>
           </div>
         </div>
       </div>

@@ -232,22 +232,22 @@ export default function CommandCenterPage() {
           <div className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl p-6">
-                <p className="text-sm text-purple-600 dark:text-purple-400 font-medium mb-2">Total Agents</p>
-                <p className="text-3xl font-bold text-purple-900 dark:text-purple-300">{metrics.totalAgents}</p>
-                <p className="text-xs text-purple-700 dark:text-purple-400 mt-1">{metrics.activeAgents} active</p>
+                <p className="text-sm text-purple-700 dark:text-purple-200 font-medium mb-2">Total Agents</p>
+                <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">{metrics.totalAgents}</p>
+                <p className="text-xs text-purple-600 dark:text-purple-200/70 mt-1">{metrics.activeAgents} active</p>
               </div>
               <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-6">
-                <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium mb-2">Executions</p>
-                <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-300">{metrics.totalExecutions}</p>
-                <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1">{metrics.successRate}% success</p>
+                <p className="text-sm text-emerald-700 dark:text-emerald-200 font-medium mb-2">Executions</p>
+                <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-100">{metrics.totalExecutions}</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-200/70 mt-1">{metrics.successRate}% success</p>
               </div>
               <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-800 rounded-xl p-6">
-                <p className="text-sm text-sky-600 dark:text-sky-400 font-medium mb-2">Tokens Used</p>
-                <p className="text-3xl font-bold text-sky-900 dark:text-sky-300">{metrics.totalTokens.toLocaleString()}</p>
+                <p className="text-sm text-sky-700 dark:text-sky-200 font-medium mb-2">Tokens Used</p>
+                <p className="text-3xl font-bold text-sky-900 dark:text-sky-100">{metrics.totalTokens.toLocaleString()}</p>
               </div>
               <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800 rounded-xl p-6">
-                <p className="text-sm text-teal-600 dark:text-teal-400 font-medium mb-2">Total Cost</p>
-                <p className="text-3xl font-bold text-teal-900 dark:text-teal-300">${metrics.totalCost.toFixed(3)}</p>
+                <p className="text-sm text-teal-700 dark:text-teal-200 font-medium mb-2">Total Cost</p>
+                <p className="text-3xl font-bold text-teal-900 dark:text-teal-100">${metrics.totalCost.toFixed(3)}</p>
               </div>
             </div>
 

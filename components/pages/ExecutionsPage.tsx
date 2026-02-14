@@ -140,19 +140,19 @@ export default function ExecutionsPage() {
         <div className="grid grid-cols-4 gap-4 mt-6">
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
             <p className="text-sm text-purple-600 font-medium">Total Runs</p>
-            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{executions.length}</p>
+            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{executions.length}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
             <p className="text-sm text-emerald-600 font-medium">Success Rate</p>
-            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{successRate}%</p>
+            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{successRate}%</p>
           </div>
           <div className="bg-sky-50 rounded-xl p-4 border border-sky-100">
             <p className="text-sm text-sky-600 font-medium">Tokens Used</p>
-            <p className="text-2xl font-bold text-sky-700 dark:text-sky-300">{totalTokens.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-sky-900 dark:text-sky-100">{totalTokens.toLocaleString()}</p>
           </div>
           <div className="bg-teal-50 dark:bg-teal-900/20 rounded-xl p-4 border border-teal-100 dark:border-teal-800">
             <p className="text-sm text-teal-600 font-medium">Total Cost</p>
-            <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">${totalCost.toFixed(3)}</p>
+            <p className="text-2xl font-bold text-teal-900 dark:text-teal-100">${totalCost.toFixed(3)}</p>
           </div>
         </div>
       </div>

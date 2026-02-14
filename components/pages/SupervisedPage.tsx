@@ -144,15 +144,15 @@ export default function SupervisedPage() {
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
             <p className="text-xs text-emerald-600 font-medium">Approved Today</p>
-            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{log.filter(l => l.result === 'approved').length}</p>
+            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{log.filter(l => l.result === 'approved').length}</p>
           </div>
           <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-100 dark:border-red-800">
             <p className="text-xs text-red-600 font-medium">Rejected</p>
-            <p className="text-2xl font-bold text-red-700 dark:text-red-300">{log.filter(l => l.result === 'rejected').length}</p>
+            <p className="text-2xl font-bold text-red-900 dark:text-red-100">{log.filter(l => l.result === 'rejected').length}</p>
           </div>
           <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
             <p className="text-xs text-purple-600 font-medium">Auto-handled</p>
-            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{log.filter(l => l.result === 'auto').length}</p>
+            <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">{log.filter(l => l.result === 'auto').length}</p>
           </div>
         </div>
 
