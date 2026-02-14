@@ -28,7 +28,9 @@ export interface IntegrationConfig {
   testEndpoint?: (credentials: Record<string, any>) => Promise<boolean>
 }
 
-// OAUTH-BASED INTEGRATIONS
+// ============================================
+// SLACK
+// ============================================
 
 export const SLACK_CONFIG: IntegrationConfig = {
   id: 'slack',
@@ -39,45 +41,68 @@ export const SLACK_CONFIG: IntegrationConfig = {
   type: 'oauth',
   steps: [
     {
-      title: 'Slack Permissions',
-      description: 'Grant permissions to monitor channels and send messages',
-      fields: [
-        {
-          name: 'permissions',
-          label: 'Required Permissions',
-          type: 'checkbox',
-          required: true,
-          options: [
-            { label: 'Read messages', value: 'read' },
-            { label: 'Send messages', value: 'send' },
-            { label: 'View channel info', value: 'channels' },
-          ],
-        },
-      ],
-      help: 'Clawdbot (our platform) needs these permissions to monitor conversations and let AI employees respond to mentions. No data leaves our system.',
+      title: '📋 Step 1: Create a Slack App',
+      description: 'We need to create an app in your Slack workspace. This takes 2 minutes.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Open Slack Apps → [Link below] ↗
+2. Click "Create New App" button (top right)
+3. Choose "From scratch"
+4. Name it anything (e.g., "My AI Agent")
+5. Pick your workspace
+6. Click "Create App"
+
+You'll now be in the app settings. Keep this tab open for the next step.`,
       links: [
-        { label: 'Create a Slack App', url: 'https://api.slack.com/apps' },
+        { label: '→ Open Slack Apps', url: 'https://api.slack.com/apps' },
       ],
     },
     {
-      title: 'Authorize with Slack',
-      description: 'Connect your Slack workspace',
+      title: '📋 Step 2: Set Permissions',
+      description: 'Grant permissions so our AI can read and send messages.',
+      fields: [],
+      help: `📌 What to do:
+1. In your app settings (from Step 1), click "OAuth & Permissions" in the left sidebar
+2. Scroll down to "Scopes" section
+3. Under "Bot Token Scopes", click "Add an OAuth Scope"
+4. Add these 3 scopes:
+   • chat:write (allows sending messages)
+   • app_mentions:read (allows reading @mentions)
+   • channels:read (allows reading channel info)
+5. Click "Install to Workspace" at the top
+6. Slack will ask for permission — click "Allow"
+
+You'll now see a "Bot User OAuth Token" (starts with xoxb-). This is what we need next.`,
+    },
+    {
+      title: '📋 Step 3: Copy Your Bot Token',
+      description: 'Paste your Bot User OAuth Token below. This is what lets Clawdbot talk to Slack.',
       fields: [
         {
-          name: 'oauth_action',
-          label: 'Action',
-          type: 'select',
+          name: 'bot_token',
+          label: 'Bot User OAuth Token',
+          type: 'textarea',
+          placeholder: 'xoxb-your-token-here',
           required: true,
-          options: [
-            { label: 'Add to Slack', value: 'add' },
-          ],
+          validation: (value) => {
+            if (!value || value.trim().length === 0) return 'Bot token is required'
+            if (!value.startsWith('xoxb-')) return 'Token should start with "xoxb-"'
+            return null
+          },
         },
       ],
-      help: 'You\'ll be redirected to Slack to approve. Requires OAuth app configured at https://api.slack.com/apps',
+      help: `📌 Where to find it:
+1. Go back to your Slack app settings (api.slack.com/apps)
+2. Click "OAuth & Permissions" in the left sidebar
+3. Under "OAuth Tokens for Your Workspace", find "Bot User OAuth Token"
+4. Click the copy icon next to it
+5. Paste it in the field above
+
+⚠️ Keep this token secret! It's like a password for your Slack integration.`,
     },
     {
-      title: 'Select Channels',
-      description: 'Choose which channels your AI employees will monitor',
+      title: '📋 Step 4: Select Channels to Monitor',
+      description: 'Choose which Slack channels your AI will monitor and respond in.',
       fields: [
         {
           name: 'channels',
@@ -88,59 +113,114 @@ export const SLACK_CONFIG: IntegrationConfig = {
           validation: (value) => value?.length > 0 ? null : 'Select at least one channel',
         },
       ],
-      help: 'Messages in these channels will be routed through Clawdbot to your selected agents.',
+      help: `📌 Tips:
+• Select channels where you want AI to participate (e.g., #support, #alerts, #general)
+• You can have the AI monitor without responding — just reading messages
+• Add more channels later anytime
+
+Why: This limits what your AI sees. We only give it access to channels you specify.`,
+    },
+    {
+      title: '📋 Step 5: Pick Your AI Agent',
+      description: 'Which of your AI employees should handle Slack messages?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 How this works:
+• Messages from your selected Slack channels will be sent to this agent
+• The agent will read them and respond (if configured to)
+• Different agents can handle different channels (you set that up later)
+
+Why: This lets you route different channels to different AI employees based on expertise.`,
+    },
+    {
+      title: '✅ Done! Your Slack integration is ready',
+      description: 'Click "Connect" below to save everything.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ I understand my AI will now monitor and respond in selected Slack channels', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 What happens next:
+• Your AI employee will start monitoring the Slack channels you selected
+• When someone mentions it (@YourAgentName), it will respond
+• You can test it immediately by going to one of your selected channels
+• To pause the AI, go to Integrations and toggle it off
+
+Need help? You can edit these settings anytime.`,
     },
   ],
 }
+
+// ============================================
+// GITHUB
+// ============================================
 
 export const GITHUB_CONFIG: IntegrationConfig = {
   id: 'github',
   name: 'GitHub',
   icon: '🐙',
-  description: 'Review PRs, monitor commits, track issues, and automate workflows',
+  description: 'Connect GitHub. Clawdbot monitors PRs, issues, and deployments.',
   category: 'development',
   type: 'oauth',
   steps: [
     {
-      title: 'GitHub Permissions',
-      description: 'Select the permissions needed for your use case',
-      fields: [
-        {
-          name: 'permissions',
-          label: 'Scopes',
-          type: 'checkbox',
-          required: true,
-          options: [
-            { label: 'Read repositories', value: 'repo:read' },
-            { label: 'Manage pull requests', value: 'pr:manage' },
-            { label: 'Read issues', value: 'issues:read' },
-          ],
-        },
-      ],
-      help: 'Permissions control what your AI can access and do in your repositories.',
+      title: '📋 Step 1: Create a GitHub Personal Access Token',
+      description: 'GitHub needs a token so Clawdbot can access your repositories.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Go to GitHub Settings → Developer Settings → Personal Access Tokens → Tokens (classic) [Link below] ↗
+2. Click "Generate new token" → "Generate new token (classic)"
+3. Give it a name (e.g., "Clawdbot Integration")
+4. Under "Select scopes", check these boxes:
+   • repo (full repo access)
+   • read:org (read organization data)
+5. Click "Generate token" at the bottom
+6. Copy the token (you won't be able to see it again!)
+
+Keep this page open — you'll paste the token in the next step.`,
       links: [
-        { label: 'Create OAuth App', url: 'https://github.com/settings/developers' },
+        { label: '→ Open GitHub Tokens', url: 'https://github.com/settings/tokens?type=beta' },
       ],
     },
     {
-      title: 'Connect with GitHub',
-      description: 'Authorize the connection',
+      title: '📋 Step 2: Paste Your GitHub Token',
+      description: 'Paste the personal access token you just created.',
       fields: [
         {
-          name: 'oauth_action',
-          label: 'Action',
-          type: 'select',
+          name: 'github_token',
+          label: 'GitHub Personal Access Token',
+          type: 'textarea',
+          placeholder: 'ghp_xxxxxxxxxxxx',
           required: true,
-          options: [
-            { label: 'Connect with GitHub', value: 'connect' },
-          ],
+          validation: (value) => {
+            if (!value || value.trim().length === 0) return 'GitHub token is required'
+            if (!value.startsWith('ghp_') && !value.startsWith('github_pat_')) return 'Token format looks wrong'
+            return null
+          },
         },
       ],
-      help: 'You\'ll be redirected to GitHub to authorize. NOTE: Requires OAuth app configuration at https://github.com/settings/developers',
+      help: `📌 Why we need this:
+• This token lets Clawdbot read your PRs, issues, and commits
+• It's read-only by default (unless you gave it write permissions)
+• It's specific to your account, so only you can see what Clawdbot does
+
+⚠️ Keep it secret! It's like a password.`,
     },
     {
-      title: 'Select Repositories',
-      description: 'Choose which repositories to monitor',
+      title: '📋 Step 3: Select Repositories to Monitor',
+      description: 'Which repositories should your AI watch?',
       fields: [
         {
           name: 'repos',
@@ -151,86 +231,188 @@ export const GITHUB_CONFIG: IntegrationConfig = {
           validation: (value) => value?.length > 0 ? null : 'Select at least one repository',
         },
       ],
-      help: 'Your AI will monitor PRs, issues, and commits in selected repositories.',
+      help: `📌 Tips:
+• Pick repositories where you want AI to monitor PRs and issues
+• Your AI will be able to review code and suggest improvements
+• Start with 1-2 repos, add more later as needed
+
+Why: This prevents your AI from accessing private repos you don't want it to touch.`,
+    },
+    {
+      title: '📋 Step 4: Pick Your AI Agent',
+      description: 'Which AI employee should review your code?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 How it works:
+• This agent will monitor your selected repos
+• It can review pull requests, comment on code, and suggest improvements
+• Each repo can have a different agent (you configure that later)
+
+Pro tip: Use your "Engineering" or "Code Quality" agent if you have one.`,
+    },
+    {
+      title: '✅ All set! GitHub is connected',
+      description: 'Click "Connect" to save and start monitoring.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ I want my AI to monitor PRs and issues in the selected repos', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 Next steps:
+• Create a new pull request in one of your monitored repos
+• Your AI should appear as a reviewer shortly
+• You can customize what it reviews (just comments, or actual code changes)
+
+Having issues? Make sure your token has the "repo" scope enabled.`,
     },
   ],
 }
+
+// ============================================
+// HUBSPOT
+// ============================================
 
 export const HUBSPOT_CONFIG: IntegrationConfig = {
   id: 'hubspot',
   name: 'HubSpot',
   icon: '🔶',
-  description: 'Auto-log calls, update deal stages, and track customer interactions',
+  description: 'Connect HubSpot. Clawdbot auto-logs calls, updates deals, tracks customer info.',
   category: 'crm',
   type: 'oauth',
   steps: [
     {
-      title: 'HubSpot Account',
-      description: 'We need access to your HubSpot workspace',
-      fields: [
-        {
-          name: 'account',
-          label: 'Account Info',
-          type: 'text',
-          placeholder: 'Your HubSpot account will be linked',
-        },
-      ],
-      help: 'HubSpot integrations are auto-configured once authorized.',
+      title: '📋 Step 1: Create a HubSpot Private App',
+      description: 'HubSpot uses "Private Apps" for integrations. We need to create one.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Go to HubSpot Settings → Integrations → Private Apps [Link below] ↗
+2. Click "Create app" button (top right)
+3. Go to the "Scopes" tab
+4. Enable these scopes:
+   • crm.objects.contacts.read
+   • crm.objects.contacts.write
+   • crm.objects.deals.read
+   • crm.objects.deals.write
+   • crm.objects.calls.read
+   • crm.objects.calls.write
+5. Click "Create app" at the bottom
+
+You'll see your app in the list now.`,
       links: [
-        { label: 'Create Private App', url: 'https://app.hubspot.com/l/private-apps' },
+        { label: '→ Open HubSpot Private Apps', url: 'https://app.hubspot.com/l/private-apps' },
       ],
     },
     {
-      title: 'Connect with HubSpot',
-      description: 'Click to authorize your HubSpot workspace',
+      title: '📋 Step 2: Copy Your Access Token',
+      description: "Get your app's access token to connect Clawdbot.",
       fields: [
         {
-          name: 'oauth_action',
-          label: 'Action',
-          type: 'select',
+          name: 'hubspot_token',
+          label: 'HubSpot Private App Access Token',
+          type: 'textarea',
+          placeholder: 'pat-...',
           required: true,
-          options: [
-            { label: 'Connect with HubSpot', value: 'connect' },
-          ],
+          validation: (value) => {
+            if (!value || value.trim().length === 0) return 'Token is required'
+            return null
+          },
         },
       ],
-      help: 'NOTE: Requires OAuth app configuration. HubSpot will auto-configure available features.',
+      help: `📌 How to get it:
+1. Go back to HubSpot Settings → Integrations → Private Apps
+2. Find the app you just created
+3. Click on it
+4. You'll see "Access token" with a copy icon
+5. Copy it and paste it above
+
+⚠️ This is sensitive! Keep it secret.`,
+    },
+    {
+      title: '📋 Step 3: Pick Your AI Agent',
+      description: 'Which AI employee should manage your CRM data?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 What this agent can do:
+• Log call notes automatically to contacts
+• Update deal stages based on conversations
+• Enrich contact information
+• Send follow-up reminders
+
+Pro tip: Use your "Sales" or "CRM Manager" agent for this.`,
+    },
+    {
+      title: '✅ HubSpot is connected!',
+      description: 'Click "Connect" to activate your CRM integration.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ My AI can now read and update HubSpot contacts and deals', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 What happens next:
+• Your AI will start monitoring conversations
+• Call notes will auto-log to the relevant contact in HubSpot
+• Deals will update automatically as conversations progress
+
+Test it: Create a new deal and watch your AI track it!`,
     },
   ],
 }
+
+// ============================================
+// GMAIL
+// ============================================
 
 export const GMAIL_CONFIG: IntegrationConfig = {
   id: 'gmail',
   name: 'Gmail',
   icon: '📧',
-  description: 'Monitor inboxes, draft responses, and flag urgent emails',
+  description: 'Connect Gmail. Clawdbot drafts responses and auto-categorizes emails.',
   category: 'communication',
   type: 'oauth',
   steps: [
     {
-      title: 'Gmail Scopes',
-      description: 'Select which permissions your AI needs',
-      fields: [
-        {
-          name: 'scopes',
-          label: 'Email Permissions',
-          type: 'checkbox',
-          required: true,
-          options: [
-            { label: 'Read emails', value: 'read' },
-            { label: 'Send emails', value: 'send' },
-            { label: 'Modify labels', value: 'labels' },
-          ],
-        },
-      ],
-      help: 'More permissions allow your AI to draft responses and organize messages.',
+      title: '📋 Step 1: Enable Gmail API',
+      description: 'We need permission to connect to your Gmail account.',
+      fields: [],
+      help: `📌 Here's what to do:
+1. Go to Google Cloud Console [Link below] ↗
+2. Create a new project (or use an existing one)
+3. Search for "Gmail API" in the search bar
+4. Click "Gmail API"
+5. Click "Enable"
+
+That's it! Google has now enabled the Gmail API for you.`,
       links: [
-        { label: 'Create OAuth 2.0 Credentials', url: 'https://myaccount.google.com/security' },
+        { label: '→ Open Google Cloud Console', url: 'https://console.cloud.google.com' },
       ],
     },
     {
-      title: 'Connect with Google',
-      description: 'Authorize Gmail access',
+      title: '📋 Step 2: Authorize Gmail Access',
+      description: 'Connect your Gmail account to Clawdbot.',
       fields: [
         {
           name: 'oauth_action',
@@ -242,106 +424,260 @@ export const GMAIL_CONFIG: IntegrationConfig = {
           ],
         },
       ],
-      help: 'NOTE: Requires OAuth app configuration. You\'ll be redirected to Google to authorize.',
+      help: `📌 What happens next:
+• You'll be redirected to Google
+• Google will ask for permission to access Gmail
+• You'll grant permission, then return here
+
+Why we need this:
+• Your AI needs to read emails to draft responses
+• It can flag urgent messages
+• It can help organize your inbox`,
+    },
+    {
+      title: '📋 Step 3: Choose Email Labels to Monitor',
+      description: 'Which Gmail labels should your AI watch?',
+      fields: [
+        {
+          name: 'labels',
+          label: 'Gmail Labels',
+          type: 'multi-select',
+          required: true,
+          options: [
+            { label: 'Inbox', value: 'INBOX' },
+            { label: 'Support', value: 'Support' },
+            { label: 'Sales', value: 'Sales' },
+          ],
+          validation: (value) => value?.length > 0 ? null : 'Select at least one label',
+        },
+      ],
+      help: `📌 Tips:
+• Select labels where you want AI to help (e.g., Support emails)
+• The AI can read these emails and draft responses
+• You'll review and approve before anything sends
+
+Why: This keeps your AI focused on emails that matter.`,
+    },
+    {
+      title: '📋 Step 4: Pick Your AI Agent',
+      description: 'Which AI employee should handle your emails?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 What this agent does:
+• Reads incoming emails from your selected labels
+• Drafts responses (you review before sending)
+• Flags urgent/important emails
+• Suggests email threads to follow up on
+
+Pro tip: Use your "Customer Support" or "Sales Support" agent.`,
+    },
+    {
+      title: '✅ Gmail is ready!',
+      description: 'Click "Connect" to activate email integration.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ My AI can now read my Gmail and draft responses', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 Next steps:
+• New emails will start appearing in your AI's inbox
+• It will draft responses for you to review
+• All changes require your approval before sending
+
+Your email security: Clawdbot is read-only by default. Nothing sends without you.`,
     },
   ],
 }
 
-// TOKEN/KEY-BASED INTEGRATIONS
+// ============================================
+// SENTRY
+// ============================================
 
 export const SENTRY_CONFIG: IntegrationConfig = {
   id: 'sentry',
   name: 'Sentry',
   icon: '🛡️',
-  description: 'Monitor errors, correlate with deployments, and alert on-call engineers',
+  description: 'Connect Sentry. Clawdbot monitors errors and alerts your team.',
   category: 'monitoring',
   type: 'token',
   steps: [
     {
-      title: 'Sentry Auth Token',
-      description: 'Paste your Sentry authentication token',
+      title: '📋 Step 1: Create a Sentry API Token',
+      description: 'We need an API token so Clawdbot can access your errors.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Go to Sentry Settings → Auth Tokens [Link below] ↗
+2. Click "Create New Token" button
+3. Give it a name (e.g., "Clawdbot")
+4. Under "Scopes", select:
+   • event:read
+   • event:write
+   • project:read
+5. Click "Create Token"
+6. Copy the token (you won't see it again!)
+
+Keep this page open for the next step.`,
+      links: [
+        { label: '→ Open Sentry Auth Tokens', url: 'https://sentry.io/settings/auth-tokens/' },
+      ],
+    },
+    {
+      title: '📋 Step 2: Paste Your Sentry API Token',
+      description: 'Paste the token you just created.',
       fields: [
         {
-          name: 'token',
-          label: 'Auth Token',
+          name: 'sentry_token',
+          label: 'Sentry API Token',
           type: 'textarea',
-          placeholder: 'Paste your token here',
+          placeholder: 'sntrys_xxxxxxxxxxxxx',
           required: true,
           validation: (value) => {
             if (!value || value.trim().length === 0) return 'Token is required'
-            if (value.trim().length < 10) return 'Token seems too short'
             return null
           },
         },
       ],
-      help: 'Find your auth token in Sentry account settings. This allows us to access your error data.',
-      links: [
-        { label: 'Get Auth Token', url: 'https://sentry.io/settings/account/api/auth-tokens/' },
-      ],
+      help: `📌 Why we need this:
+• This token lets Clawdbot read error data from Sentry
+• Your AI can analyze stack traces and suggest fixes
+• Incidents will trigger alerts to your team
+
+Security: This token only has read access to errors.`,
     },
     {
-      title: 'Select Organization & Projects',
-      description: 'Choose which projects to monitor',
+      title: '📋 Step 3: Select Projects to Monitor',
+      description: 'Which Sentry projects should your AI watch?',
       fields: [
         {
-          name: 'organization',
-          label: 'Organization',
-          type: 'select',
-          required: true,
-          options: [],
-          validation: (value) => value ? null : 'Select an organization',
-        },
-        {
           name: 'projects',
-          label: 'Projects to Monitor',
+          label: 'Sentry Projects',
           type: 'multi-select',
           required: true,
           options: [],
           validation: (value) => value?.length > 0 ? null : 'Select at least one project',
         },
       ],
-      help: 'Your AI will monitor errors and issues in selected projects.',
+      help: `📌 Tips:
+• Select projects you want monitored (e.g., your main API, web app, mobile)
+• Your AI will get alerts when new errors happen
+• You can add more projects later
+
+Why: Limits monitoring to projects that matter for your business.`,
+    },
+    {
+      title: '📋 Step 4: Pick Your AI Agent',
+      description: 'Which AI employee should analyze errors?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 What this agent does:
+• Monitors Sentry for new errors
+• Analyzes stack traces
+• Suggests root causes and fixes
+• Alerts your team to critical issues
+
+Pro tip: Use your "DevOps" or "Incident Response" agent.`,
+    },
+    {
+      title: '✅ Sentry monitoring is active!',
+      description: 'Click "Connect" to start monitoring errors.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ My AI will monitor and analyze Sentry errors', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 What happens next:
+• Errors will start flowing to your AI agent
+• It will analyze them and suggest fixes
+• You'll get alerts for critical issues
+• Your AI will help prioritize what to fix first
+
+Test it: Trigger a test error in Sentry and watch your AI respond!`,
     },
   ],
 }
+
+// ============================================
+// LINEAR
+// ============================================
 
 export const LINEAR_CONFIG: IntegrationConfig = {
   id: 'linear',
   name: 'Linear',
   icon: '📋',
-  description: 'Track issues, create tickets from alerts, and sync project status',
+  description: 'Connect Linear. Clawdbot creates tickets and syncs issue status.',
   category: 'productivity',
   type: 'token',
   steps: [
     {
-      title: 'Linear API Key',
-      description: 'Paste your Linear API key',
+      title: '📋 Step 1: Create a Linear API Key',
+      description: 'We need an API key so Clawdbot can create and update tickets.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Go to Linear Settings → API [Link below] ↗
+2. Click "Create new" button
+3. Give it a label (e.g., "Clawdbot")
+4. Click "Create API Key"
+5. Copy the key (you won't see it again!)
+
+Keep this page open for the next step.`,
+      links: [
+        { label: '→ Open Linear API Settings', url: 'https://linear.app/settings/api' },
+      ],
+    },
+    {
+      title: '📋 Step 2: Paste Your Linear API Key',
+      description: 'Paste the API key you just created.',
       fields: [
         {
-          name: 'token',
-          label: 'API Key',
+          name: 'linear_token',
+          label: 'Linear API Key',
           type: 'textarea',
-          placeholder: 'Paste your API key here',
+          placeholder: 'lin_api_xxxxxxxxxxxx',
           required: true,
           validation: (value) => {
             if (!value || value.trim().length === 0) return 'API key is required'
-            if (value.trim().length < 10) return 'API key seems too short'
             return null
           },
         },
       ],
-      help: 'Get your API key from Linear settings. This allows us to create and update issues.',
-      links: [
-        { label: 'Get API Key', url: 'https://linear.app/settings/api' },
-      ],
+      help: `📌 Why we need this:
+• This key lets Clawdbot create and update Linear issues
+• Your AI can convert messages into tickets
+• It can update issue status as work progresses
+
+Security: Keep this key secret!`,
     },
     {
-      title: 'Select Team & Projects',
-      description: 'Choose which teams and projects to manage',
+      title: '📋 Step 3: Select Team & Projects',
+      description: 'Which Linear team and projects should your AI manage?',
       fields: [
         {
           name: 'team',
-          label: 'Team',
+          label: 'Linear Team',
           type: 'select',
           required: true,
           options: [],
@@ -356,236 +692,515 @@ export const LINEAR_CONFIG: IntegrationConfig = {
           validation: (value) => value?.length > 0 ? null : 'Select at least one project',
         },
       ],
-      help: 'Your AI will be able to create and update issues in selected projects.',
+      help: `📌 Tips:
+• Select the team where you want issues created
+• Choose projects your AI should track
+• Your AI can move issues between these projects
+
+Why: Keeps ticket creation organized in the right teams.`,
+    },
+    {
+      title: '📋 Step 4: Pick Your AI Agent',
+      description: 'Which AI employee should manage your Linear tickets?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 What this agent does:
+• Creates Linear tickets from messages or alerts
+• Updates issue status as work progresses
+• Moves tickets between projects
+• Assigns tickets to team members
+
+Pro tip: Use your "Product Manager" or "Engineering Manager" agent.`,
+    },
+    {
+      title: '✅ Linear integration is ready!',
+      description: 'Click "Connect" to start creating tickets.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ My AI can create and update Linear tickets', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 What happens next:
+• Your AI will start creating Linear tickets
+• It can update status, assign owners, and move tickets
+• Your team will stay in sync across Slack, GitHub, and Linear
+
+Start using it: Tell your AI "Create a Linear ticket for..." in Slack!`,
     },
   ],
 }
+
+// ============================================
+// VERCEL
+// ============================================
 
 export const VERCEL_CONFIG: IntegrationConfig = {
   id: 'vercel',
   name: 'Vercel',
   icon: '▲',
-  description: 'Monitor deployments, track build status, and correlate with errors',
+  description: 'Connect Vercel. Clawdbot monitors deployments and build status.',
   category: 'development',
   type: 'token',
   steps: [
     {
-      title: 'Vercel Access Token',
-      description: 'Paste your Vercel access token',
+      title: '📋 Step 1: Create a Vercel API Token',
+      description: 'We need a token so Clawdbot can monitor your deployments.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Go to Vercel Settings → Tokens [Link below] ↗
+2. Click "Create" button
+3. Give it a name (e.g., "Clawdbot")
+4. Set expiration to "No expiration" (optional)
+5. Click "Create Token"
+6. Copy the token (you won't see it again!)
+
+Keep this page open for the next step.`,
+      links: [
+        { label: '→ Open Vercel Tokens', url: 'https://vercel.com/account/tokens' },
+      ],
+    },
+    {
+      title: '📋 Step 2: Paste Your Vercel API Token',
+      description: 'Paste the token you just created.',
       fields: [
         {
-          name: 'token',
-          label: 'Access Token',
+          name: 'vercel_token',
+          label: 'Vercel API Token',
           type: 'textarea',
-          placeholder: 'Paste your token here',
+          placeholder: 'VercelToken...',
           required: true,
           validation: (value) => {
             if (!value || value.trim().length === 0) return 'Token is required'
-            if (value.trim().length < 10) return 'Token seems too short'
             return null
           },
         },
       ],
-      help: 'Get your access token from Vercel dashboard. This allows us to monitor deployments.',
-      links: [
-        { label: 'Get Access Token', url: 'https://vercel.com/account/tokens' },
-      ],
+      help: `📌 Why we need this:
+• This token lets Clawdbot see your deployments
+• Your AI can monitor build status and performance
+• Incidents will trigger alerts
+
+Security: This is read-only for monitoring purposes.`,
     },
     {
-      title: 'Select Projects',
-      description: 'Choose which projects to monitor',
+      title: '📋 Step 3: Select Projects to Monitor',
+      description: 'Which Vercel projects should your AI watch?',
       fields: [
         {
           name: 'projects',
-          label: 'Projects to Monitor',
+          label: 'Vercel Projects',
           type: 'multi-select',
           required: true,
           options: [],
           validation: (value) => value?.length > 0 ? null : 'Select at least one project',
         },
       ],
-      help: 'Your AI will monitor deployment status and build logs for selected projects.',
+      help: `📌 Tips:
+• Select projects to monitor for deployments
+• Your AI will get alerts on build failures
+• It can correlate deployments with errors
+
+Why: Focus on projects that matter to your users.`,
+    },
+    {
+      title: '📋 Step 4: Pick Your AI Agent',
+      description: 'Which AI employee should monitor deployments?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 What this agent does:
+• Monitors Vercel for new deployments
+• Watches for build failures
+• Alerts your team to deployment issues
+• Can correlate with Sentry errors
+
+Pro tip: Use your "DevOps" or "Infrastructure" agent.`,
+    },
+    {
+      title: '✅ Vercel monitoring is active!',
+      description: 'Click "Connect" to start watching deployments.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ My AI will monitor Vercel deployments', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 What happens next:
+• Deployments will flow to your AI agent
+• Build failures will trigger immediate alerts
+• Your AI can help debug deployment issues
+
+Test it: Deploy something to Vercel and watch your AI monitor it!`,
     },
   ],
 }
+
+// ============================================
+// NOTION
+// ============================================
 
 export const NOTION_CONFIG: IntegrationConfig = {
   id: 'notion',
   name: 'Notion',
   icon: '📝',
-  description: 'Sync knowledge base, create pages from conversations, and track docs',
+  description: 'Connect Notion. Clawdbot syncs knowledge base and creates pages.',
   category: 'productivity',
   type: 'token',
   steps: [
     {
-      title: 'Create Notion Integration',
-      description: 'Create an internal integration in your Notion workspace',
-      fields: [
-        {
-          name: 'setup',
-          label: 'Setup Instructions',
-          type: 'text',
-          placeholder: 'Follow the link to create an internal integration',
-        },
-      ],
-      help: 'Visit Notion integrations page and create a new internal integration. You\'ll get a token.',
+      title: '📋 Step 1: Create a Notion Integration',
+      description: 'Notion uses "Internal Integrations" for API access.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Go to Notion My Integrations [Link below] ↗
+2. Click "Create new integration" button
+3. Name it (e.g., "Clawdbot")
+4. Select your workspace
+5. Go to the "Capabilities" tab
+6. Enable "Read content" and "Update content"
+7. Click "Save changes"
+
+You'll now see a "Internal Integration Token". Keep this page open.`,
       links: [
-        { label: 'Create Integration', url: 'https://www.notion.so/my-integrations' },
+        { label: '→ Open Notion Integrations', url: 'https://www.notion.so/my-integrations' },
       ],
     },
     {
-      title: 'Paste Integration Token',
-      description: 'Enter your Notion internal integration token',
+      title: '📋 Step 2: Copy Your Integration Token',
+      description: 'Paste your Notion integration token below.',
       fields: [
         {
-          name: 'token',
-          label: 'Integration Token',
+          name: 'notion_token',
+          label: 'Internal Integration Token',
           type: 'textarea',
-          placeholder: 'Paste your Notion integration token',
+          placeholder: 'secret_xxxxxxxxxxxxx',
           required: true,
           validation: (value) => {
             if (!value || value.trim().length === 0) return 'Token is required'
-            if (!value.trim().startsWith('secret_')) return 'Token should start with "secret_"'
+            if (!value.startsWith('secret_')) return 'Token should start with "secret_"'
             return null
           },
         },
       ],
-      help: 'Your Notion integration token allows us to read and create pages.',
+      help: `📌 How to get it:
+1. Go back to Notion My Integrations
+2. Click on your integration
+3. Find "Internal Integration Token"
+4. Click "Show" and then copy it
+5. Paste it above
+
+⚠️ This is like a password — keep it secret!`,
+    },
+    {
+      title: '📋 Step 3: Grant Access to Pages',
+      description: 'Tell Notion which pages Clawdbot can access.',
+      fields: [
+        {
+          name: 'pages',
+          label: 'Notion Pages to Access',
+          type: 'multi-select',
+          required: true,
+          options: [],
+          validation: (value) => value?.length > 0 ? null : 'Select at least one page',
+        },
+      ],
+      help: `📌 Here's how to grant access:
+1. Open each Notion page you selected above
+2. Click "Share" (top right)
+3. Search for your integration by name
+4. Click "Add" to invite it
+
+Why: This lets your AI read and edit these specific pages in Notion.`,
+    },
+    {
+      title: '📋 Step 4: Pick Your AI Agent',
+      description: 'Which AI employee should manage your Notion workspace?',
+      fields: [
+        {
+          name: 'agentId',
+          label: 'AI Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
+        },
+      ],
+      help: `📌 What this agent does:
+• Reads your Notion knowledge base
+• Creates new pages from conversations
+• Updates existing pages with new information
+• Keeps your documentation fresh
+
+Pro tip: Use your "Documentation" or "Knowledge Manager" agent.`,
+    },
+    {
+      title: '✅ Notion is connected!',
+      description: 'Click "Connect" to activate Notion sync.',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Confirmation',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: '✓ My AI can read and update my Notion workspace', value: 'confirmed' }],
+        },
+      ],
+      help: `🎉 What happens next:
+• Your AI will access your Notion knowledge base
+• It can reference it when answering questions
+• It can create new documentation automatically
+• Your team stays in sync across all tools
+
+Start using it: Your AI can now reference Notion pages!`,
     },
   ],
 }
 
-// BOT TOKEN-BASED INTEGRATIONS
+// ============================================
+// WHATSAPP
+// ============================================
 
 export const WHATSAPP_CONFIG: IntegrationConfig = {
   id: 'whatsapp',
   name: 'WhatsApp',
   icon: '📱',
-  description: 'Connect your WhatsApp device to chat with AI employees. Clawdbot generates a pairing QR code.',
+  description: 'Connect WhatsApp via Clawdbot pairing. No Business API needed.',
   category: 'communication',
   type: 'bot-token',
   steps: [
     {
-      title: 'Pair WhatsApp Device',
-      description: 'Clawdbot will generate a QR code to pair your WhatsApp device',
-      fields: [
-        {
-          name: 'qr_info',
-          label: 'How it works',
-          type: 'text',
-          placeholder: 'Keep your WhatsApp open and ready',
-        },
-      ],
-      help: 'Clawdbot (our platform) acts as the middleware between WhatsApp and your AI employees. When you click "Generate QR Code" below, scan it with WhatsApp on your phone to pair this account. No Business API account needed.',
+      title: '📋 Step 1: Prepare Your Phone',
+      description: 'Keep WhatsApp open on your phone — we\'ll generate a QR code to pair.',
+      fields: [],
+      help: `📌 Here's what to do:
+1. Open WhatsApp on your phone
+2. Go to WhatsApp Settings → Linked Devices
+3. Make sure you can see the option to "Link a Device"
+4. Keep the app open — you'll scan a QR code next
+
+Why Clawdbot pairing?
+• No need for WhatsApp Business API account
+• Simpler setup (just scan & pair)
+• Secure (uses your personal WhatsApp)
+• Your messages stay encrypted`,
     },
     {
-      title: 'Select Agent',
-      description: 'Choose which AI employee handles WhatsApp messages',
+      title: '📋 Step 2: Generate QR Code & Pair',
+      description: 'Clawdbot will generate a QR code. Scan it with your phone.',
+      fields: [
+        {
+          name: 'qr_code',
+          label: 'QR Code',
+          type: 'text',
+          placeholder: 'Click "Generate QR Code" button',
+        },
+      ],
+      help: `📌 Here's what to do:
+1. Click "Generate QR Code" button (appears after this step loads)
+2. A QR code will appear below
+3. On your phone, go to WhatsApp Settings → Linked Devices
+4. Tap "Link a Device"
+5. Point your phone camera at the QR code to scan it
+6. WhatsApp will pair with Clawdbot
+
+⏱️ The QR code expires in 60 seconds. If it expires, just generate a new one.`,
+    },
+    {
+      title: '📋 Step 3: Pick Your AI Agent',
+      description: 'Which AI employee should handle WhatsApp messages?',
       fields: [
         {
           name: 'agentId',
-          label: 'Agent',
+          label: 'AI Agent',
           type: 'select',
           required: true,
           options: [],
           validation: (value) => value ? null : 'Select an agent',
         },
       ],
-      help: 'Messages from WhatsApp will be routed to this agent for responses.',
+      help: `📌 How it works:
+• Messages sent to your WhatsApp account will go to this agent
+• The agent can read them and respond
+• All responses are sent through your WhatsApp account (your messages)
+
+Example uses:
+• Customer support (respond to customer inquiries)
+• Sales (follow up on leads)
+• Personal assistant (manage your messages)`,
     },
     {
-      title: 'Confirm Connection',
-      description: 'Review your WhatsApp integration settings',
+      title: '✅ WhatsApp is paired!',
+      description: 'Click "Connect" to activate WhatsApp integration.',
       fields: [
         {
           name: 'confirm',
-          label: 'Ready',
+          label: 'Confirmation',
           type: 'checkbox',
           required: true,
-          options: [{ label: 'Yes, connect WhatsApp to this agent', value: 'confirmed' }],
+          options: [{ label: '✓ My AI will handle WhatsApp messages', value: 'confirmed' }],
         },
       ],
-      help: 'Once confirmed, your WhatsApp messages will flow through Clawdbot to your selected agent.',
+      help: `🎉 What happens next:
+• Your AI will start monitoring WhatsApp messages
+• Incoming messages will be shown to your agent
+• Your agent can draft responses for you to approve
+• All messages go through your personal WhatsApp
+
+Test it: Send yourself a WhatsApp message and watch your AI respond!`,
     },
   ],
 }
+
+// ============================================
+// TELEGRAM
+// ============================================
 
 export const TELEGRAM_CONFIG: IntegrationConfig = {
   id: 'telegram',
   name: 'Telegram',
   icon: '✈️',
-  description: 'Connect your Telegram bot to chat with AI employees. Clawdbot handles the routing.',
+  description: 'Connect Telegram via Clawdbot bot routing. Simple token setup.',
   category: 'communication',
   type: 'bot-token',
   steps: [
     {
-      title: 'Create Telegram Bot',
-      description: 'Get a bot token from Telegram BotFather',
-      fields: [
-        {
-          name: 'instructions',
-          label: 'Instructions',
-          type: 'text',
-          placeholder: 'Message @BotFather on Telegram',
-        },
-      ],
-      help: 'Open Telegram and message @BotFather to create a new bot. He will give you a token. Copy and paste it in the next step.',
+      title: '📋 Step 1: Create a Telegram Bot',
+      description: 'Use @BotFather to create your bot. Takes 1 minute.',
+      fields: [],
+      help: `📌 Here's exactly what to do:
+1. Open Telegram and search for "@BotFather" [Link below] ↗
+2. Click "Start" to message him
+3. Type: /newbot
+4. BotFather will ask for a name (e.g., "My Support Bot")
+5. Type a name (anything you want — this is just for you)
+6. BotFather will ask for a username (e.g., "my_support_bot")
+7. Choose a unique username (must end in "bot")
+8. BotFather will respond with your bot token
+
+Save this token — you'll need it in the next step.`,
       links: [
-        { label: 'Open BotFather on Telegram', url: 'https://t.me/BotFather' },
+        { label: '→ Open Telegram BotFather', url: 'https://t.me/BotFather' },
       ],
     },
     {
-      title: 'Enter Bot Token',
-      description: 'Paste your Telegram bot token from BotFather',
+      title: '📋 Step 2: Paste Your Bot Token',
+      description: 'Paste the token @BotFather gave you.',
       fields: [
         {
           name: 'bot_token',
-          label: 'Bot Token',
+          label: 'Telegram Bot Token',
           type: 'textarea',
-          placeholder: 'e.g., 123456789:ABCdefGHIjklmno...',
+          placeholder: '123456789:ABCdefGHIjklmno...',
           required: true,
           validation: (value) => {
             if (!value || value.trim().length === 0) return 'Bot token is required'
-            if (!value.includes(':')) return 'Invalid bot token format (should contain a colon)'
+            if (!value.includes(':')) return 'Token format looks wrong (should contain a colon)'
             return null
           },
         },
       ],
-      help: 'Clawdbot (our platform) acts as the middleware between Telegram and your AI employees. We\'ll handle all the webhook setup.',
+      help: `📌 How to get it again if you lost it:
+1. Message @BotFather with /mybots
+2. Select your bot from the list
+3. Click "API Token"
+4. BotFather will show you the token
+5. Copy and paste it above
+
+⚠️ Keep this token secret! It's like a password for your bot.`,
     },
     {
-      title: 'Select Agent',
-      description: 'Choose which AI employee handles Telegram messages',
+      title: '📋 Step 3: Pick Your AI Agent',
+      description: 'Which AI employee should handle Telegram messages?',
       fields: [
         {
           name: 'agentId',
-          label: 'Agent',
+          label: 'AI Agent',
           type: 'select',
           required: true,
           options: [],
           validation: (value) => value ? null : 'Select an agent',
         },
       ],
-      help: 'Messages from your Telegram bot will be routed to this agent for responses.',
+      help: `📌 How it works:
+• Messages to your Telegram bot will go to this agent
+• The agent reads them and responds
+• All responses are sent through your bot (your account sends them)
+
+Example uses:
+• Support bot (answer customer questions)
+• News bot (send notifications to followers)
+• Personal AI assistant (get help in Telegram)`,
     },
     {
-      title: 'Confirm Connection',
-      description: 'Review your Telegram integration settings',
+      title: '📋 Step 4: How to Use Your Bot',
+      description: 'Here\'s how to start using your AI-powered Telegram bot.',
+      fields: [],
+      help: `📌 Next steps:
+1. Open Telegram and search for your bot username
+2. Click "Start" to begin
+3. Send a message to your bot
+4. Your AI agent will receive it and respond
+
+Tips:
+• You can share your bot with others (just give them the username)
+• Messages are handled privately by Clawdbot
+• Your bot stays active 24/7
+
+Share your bot: Tell friends "Message @[your_bot_username]" on Telegram!`,
+    },
+    {
+      title: '✅ Telegram bot is ready!',
+      description: 'Click "Connect" to activate your Telegram integration.',
       fields: [
         {
           name: 'confirm',
-          label: 'Ready',
+          label: 'Confirmation',
           type: 'checkbox',
           required: true,
-          options: [{ label: 'Yes, connect Telegram to this agent', value: 'confirmed' }],
+          options: [{ label: '✓ My AI will handle messages to my Telegram bot', value: 'confirmed' }],
         },
       ],
-      help: 'Once confirmed, Telegram messages will flow through Clawdbot to your selected agent.',
+      help: `🎉 What happens next:
+• Your bot is live and ready to receive messages
+• Every message will go to your selected AI agent
+• Your agent will respond (you can review first if needed)
+• Your bot will stay online 24/7
+
+Test it immediately: Message your bot on Telegram!`,
     },
   ],
 }
 
-// Registry of all configs
+// ============================================
+// REGISTRY
+// ============================================
+
+export function getIntegrationConfig(id: string): IntegrationConfig | undefined {
+  return INTEGRATION_CONFIGS[id]
+}
+
 export const INTEGRATION_CONFIGS: Record<string, IntegrationConfig> = {
   slack: SLACK_CONFIG,
   github: GITHUB_CONFIG,
@@ -597,8 +1212,4 @@ export const INTEGRATION_CONFIGS: Record<string, IntegrationConfig> = {
   notion: NOTION_CONFIG,
   whatsapp: WHATSAPP_CONFIG,
   telegram: TELEGRAM_CONFIG,
-}
-
-export function getIntegrationConfig(integrationId: string): IntegrationConfig | undefined {
-  return INTEGRATION_CONFIGS[integrationId]
 }
