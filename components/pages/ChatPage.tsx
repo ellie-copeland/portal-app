@@ -1,67 +1,47 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Search, MoreVertical } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Search, MoreVertical, Loader2 } from 'lucide-react'
 import ChatThread from '@/components/ChatThread'
+import { apiClient } from '@/lib/api-client'
+
+interface Message {
+  id: string
+  role?: string
+  author?: string
+  content: string
+  timestamp?: string
+  createdAt?: string
+  mentions?: string[]
+}
 
 interface Thread {
   id: string
   title: string
-  participants: string[]
-  messages: Message[]
-  lastMessageTime: string
-  unread: number
+  participants?: string[]
+  messages?: Message[]
+  lastMessageTime?: string
+  unread?: number
+  agent?: { name: string }
+  _count?: { messages: number }
 }
 
-interface Message {
+interface APIConversation {
   id: string
-  author: string
-  content: string
-  timestamp: string
-  mentions: string[]
+  title: string
+  agent?: { name: string }
+  messages?: Message[]
+  _count?: { messages: number }
 }
-
-const MOCK_THREADS: Thread[] = [
-  {
-    id: '1',
-    title: 'Agent Configuration Discussion',
-    participants: ['You', 'Main Customer Support', 'FAQ Bot'],
-    messages: [
-      { id: '1', author: 'You', content: 'How should we configure the main agent?', timestamp: '2024-02-11 10:30', mentions: ['Main Customer Support'] },
-      { id: '2', author: 'Main Customer Support', content: 'I suggest we focus on customer support first.', timestamp: '2024-02-11 10:31', mentions: ['You'] },
-      { id: '3', author: 'FAQ Bot', content: '@You Consider adding FAQ integration', timestamp: '2024-02-11 10:32', mentions: ['You'] },
-    ],
-    lastMessageTime: '2024-02-11 10:32',
-    unread: 0,
-  },
-  {
-    id: '2',
-    title: 'Task Scheduling',
-    participants: ['You', 'Sales Assistant'],
-    messages: [
-      { id: '1', author: 'You', content: 'Can we schedule daily updates?', timestamp: '2024-02-11 09:00', mentions: ['Sales Assistant'] },
-      { id: '2', author: 'Sales Assistant', content: 'Yes, I can handle that.', timestamp: '2024-02-11 09:05', mentions: ['You'] },
-    ],
-    lastMessageTime: '2024-02-11 09:05',
-    unread: 1,
-  },
-  {
-    id: '3',
-    title: 'Performance Review',
-    participants: ['You', 'Main Customer Support', 'FAQ Bot', 'Sales Assistant'],
-    messages: [
-      { id: '1', author: 'Main Customer Support', content: 'Performance metrics are looking good', timestamp: '2024-02-11 08:00', mentions: [] },
-      { id: '2', author: 'You', content: 'Great! Let\'s continue optimizing.', timestamp: '2024-02-11 08:15', mentions: ['Main Customer Support', 'FAQ Bot', 'Sales Assistant'] },
-    ],
-    lastMessageTime: '2024-02-11 08:15',
-    unread: 3,
-  },
-]
 
 export default function ChatPage() {
-  const [threads, setThreads] = useState<Thread[]>(MOCK_THREADS)
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(threads[0]?.id)
+  const [threads, setThreads] = useState<Thread[]>([])
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
+  const [selectedThreadMessages, setSelectedThreadMessages] = useState<Message[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const filteredThreads = threads.filter(thread =>
     thread.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
