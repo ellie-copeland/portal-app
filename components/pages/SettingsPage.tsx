@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Camera, Key, Bell, Globe, Shield, Save } from 'lucide-react'
+import LLMKeyManager from '@/components/LLMKeyManager'
 
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
@@ -101,20 +102,11 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* API Keys */}
+          {/* LLM API Keys */}
           <section className="bg-card border border-border rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-5 h-5 text-purple-500" /> API Keys</h2>
-            <p className="text-sm text-muted-foreground mb-4">Manage API keys for programmatic access to the platform.</p>
-            <div className="bg-muted/30 rounded-xl p-4 border border-border/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Production Key</p>
-                  <p className="text-xs text-muted-foreground font-mono">pk_live_••••••••••••••••</p>
-                </div>
-                <button className="text-xs px-3 py-1.5 bg-muted text-muted-foreground rounded-lg hover:text-foreground">Reveal</button>
-              </div>
-            </div>
-            <button className="mt-3 text-sm text-primary font-medium hover:underline">+ Generate new key</button>
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-5 h-5 text-purple-500" /> LLM API Keys</h2>
+            <p className="text-sm text-muted-foreground mb-6">Manage API keys for your AI providers (OpenRouter, Anthropic, OpenAI).</p>
+            <LLMKeyManager />
           </section>
 
           {/* Save */}

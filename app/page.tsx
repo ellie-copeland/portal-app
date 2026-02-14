@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import LLMKeyBanner from '@/components/LLMKeyBanner'
 import AgentsPage from '@/components/pages/AgentsPage'
 import TasksPage from '@/components/pages/TasksPage'
 import ChatPage from '@/components/pages/ChatPage'
@@ -36,7 +37,7 @@ export default function Dashboard() {
       case 'templates': return <TemplatesPage />
       case 'monitoring': return <MonitoringPage />
       case 'supervised': return <SupervisedPage />
-      case 'agent-chat': return <AgentChatPage />
+      case 'agent-chat': return <AgentChatPage onNavigateToSettings={setCurrentPage} />
       case 'tasks': return <TasksPage />
       case 'chat': return <ChatPage />
       case 'executions': return <ExecutionsPage />
@@ -58,6 +59,7 @@ export default function Dashboard() {
           <Header onNavigate={setCurrentPage} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} />
         </div>
         <main className="flex-1 overflow-auto">
+          <LLMKeyBanner onAddKey={() => setCurrentPage('settings')} />
           {renderPage()}
         </main>
       </div>

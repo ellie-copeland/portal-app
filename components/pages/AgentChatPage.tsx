@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Paperclip, Phone, Sparkles } from 'lucide-react'
+import { Send, Bot, User, Paperclip, Phone, Sparkles, AlertCircle } from 'lucide-react'
 import { getAgents } from '@/lib/store'
 
 interface ChatMessage {
@@ -30,11 +30,17 @@ const MOCK_CONVERSATIONS: Record<string, ChatMessage[]> = {
   ],
 }
 
-export default function AgentChatPage() {
+interface AgentChatPageProps {
+  onNavigateToSettings?: (page: any) => void
+}
+
+export default function AgentChatPage({ onNavigateToSettings }: AgentChatPageProps) {
   const [agents] = useState(getAgents())
   const [selectedAgent, setSelectedAgent] = useState(agents[0]?.name || 'Customer Support')
   const [messages, setMessages] = useState<ChatMessage[]>(MOCK_CONVERSATIONS[selectedAgent] || [])
   const [input, setInput] = useState('')
+  const [apiKeyError, setApiKeyError] = useState(false)
+  const [checkingKeys, setCheckingKeys] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -45,8 +51,36 @@ export default function AgentChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Check for API keys on mount
+  useEffect(() => {
+    const checkApiKeys = async () => {
+      try {
+        const res = await fetch('/api/keys')
+        if (res.ok) {
+          const data = await res.json()
+          setApiKeyError(!data.keys || data.keys.length === 0)
+        } else {
+          setApiKeyError(true)
+        }
+      } catch (error) {
+        console.error('Error checking API keys:', error)
+        setApiKeyError(true)
+      } finally {
+        setCheckingKeys(false)
+      }
+    }
+
+    checkApiKeys()
+  }, [])
+
   const handleSend = () => {
     if (!input.trim()) return
+
+    if (apiKeyError) {
+      // Don't send if no API key is configured
+      return
+    }
+
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -143,7 +177,24 @@ export default function AgentChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
+          {!checkingKeys && apiKeyError && (
+            <div className="self-center max-w-sm text-center">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4 mb-4">
+                <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+                <h3 className="font-semibold text-amber-900 dark:text-amber-300 mb-1">No API Key Configured</h3>
+                <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
+                  Add an API key to start chatting with your agents
+                </p>
+                <button
+                  onClick={() => onNavigateToSettings?.('settings')}
+                  className="text-sm px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Go to Settings
+                </button>
+              </div>
+            </div>
+          )}
           {messages.map(msg => (
             <div key={msg.id} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -185,8 +236,9 @@ export default function AgentChatPage() {
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim()}
-              className="p-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
+              disabled={!input.trim() || apiKeyError}
+              title={apiKeyError ? 'No API key configured. Add one in Settings' : ''}
+              className="p-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send className="w-5 h-5" />
             </button>
