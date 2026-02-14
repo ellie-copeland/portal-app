@@ -19,42 +19,47 @@ const chatSchema = z.object({
   conversationId: z.string().nullable().optional(),
 })
 
-// Firecrawl scrape tool implementation
+// Simple web scraper — fetches page HTML and extracts text content
 async function scrapeWebpageExecute({ url }: { url: string }): Promise<{ url: string; title: string; content: string; error?: string }> {
-  const apiKey = process.env.FIRECRAWL_API_KEY
-  if (!apiKey) {
-    return { url, title: '', content: '', error: 'Firecrawl API key not configured' }
-  }
-
   try {
-    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
+    const response = await fetch(url, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'User-Agent': 'Mozilla/5.0 (compatible; PortalBot/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
-      body: JSON.stringify({
-        url,
-        formats: ['markdown'],
-      }),
+      signal: AbortSignal.timeout(10000),
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      return { url, title: '', content: '', error: `Firecrawl error (${response.status}): ${error}` }
+      return { url, title: '', content: '', error: `HTTP ${response.status}` }
     }
 
-    const data = await response.json()
-    const markdown = data.data?.markdown || ''
-    const truncated = markdown.length > 8000
-      ? markdown.slice(0, 8000) + '\n\n[Content truncated...]'
-      : markdown
+    const html = await response.text()
+    
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is)
+    const title = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : ''
 
-    return {
-      url,
-      title: data.data?.metadata?.title || '',
-      content: truncated,
-    }
+    // Strip HTML tags, scripts, styles to get text content
+    const textContent = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    const truncated = textContent.length > 8000
+      ? textContent.slice(0, 8000) + '\n\n[Content truncated...]'
+      : textContent
+
+    return { url, title, content: truncated }
   } catch (err) {
     return { url, title: '', content: '', error: `Failed to scrape: ${err instanceof Error ? err.message : String(err)}` }
   }
