@@ -13,14 +13,8 @@ interface Notification {
   read: boolean
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  { id: 'n1', type: 'alert', title: 'Critical: PaymentProcessor error spike', description: 'Sentry Monitor detected 340% increase in errors', timestamp: '2 min ago', read: false },
-  { id: 'n2', type: 'approval', title: 'Pending: Draft response for Acme Corp', description: 'Sales Assistant needs your approval', timestamp: '5 min ago', read: false },
-  { id: 'n3', type: 'system', title: 'Setup complete', description: 'Your Engineering Team template has been deployed', timestamp: '15 min ago', read: false },
-  { id: 'n4', type: 'alert', title: 'Warning: HubSpot API quota at 87%', description: 'Consider throttling CRM sync frequency', timestamp: '20 min ago', read: true },
-  { id: 'n5', type: 'approval', title: 'Approved: PR #249 review comment', description: 'Code Reviewer action was approved by Brady M.', timestamp: '1 hour ago', read: true },
-  { id: 'n6', type: 'system', title: 'New template available', description: 'On-Call Companion template added to marketplace', timestamp: '2 hours ago', read: true },
-]
+// No mock notifications — start empty, populate from real data
+const MOCK_NOTIFICATIONS: Notification[] = []
 
 const SEARCH_PAGES: { id: PageType; label: string; section: string }[] = [
   { id: 'command-center', label: 'Command Center', section: 'Overview' },
