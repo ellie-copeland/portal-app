@@ -1,33 +1,22 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Paperclip, Phone, Sparkles, AlertCircle } from 'lucide-react'
-import { getAgents } from '@/lib/store'
+import { Send, Bot, User, Paperclip, Phone, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
+
+interface Agent {
+  id: string
+  name: string
+  model?: string
+  status?: 'active' | 'inactive'
+}
 
 interface ChatMessage {
   id: string
-  role: 'user' | 'agent'
+  role: 'user' | 'assistant'
   content: string
   timestamp: string
   agent?: string
-}
-
-const MOCK_CONVERSATIONS: Record<string, ChatMessage[]> = {
-  'Customer Support': [
-    { id: 'm1', role: 'agent', content: "Good morning! I've been monitoring your support channels. 3 new tickets came in overnight — 2 billing issues and 1 feature request. The billing issues are related to the PaymentProcessor error from yesterday. Want me to draft responses?", timestamp: '9:01 AM', agent: 'Customer Support' },
-    { id: 'm2', role: 'user', content: 'Yes, draft responses for the billing issues. What about the feature request?', timestamp: '9:03 AM' },
-    { id: 'm3', role: 'agent', content: "The feature request is for bulk export of invoices — it's been requested 4 times this month. I'd recommend adding it to the product roadmap. I'll draft the billing responses now and send them for your approval in the Supervised queue.", timestamp: '9:03 AM', agent: 'Customer Support' },
-  ],
-  'Sentry Monitor': [
-    { id: 'm4', role: 'agent', content: '🚨 Alert: PaymentProcessor NullPointerException — error rate up 340% since deploy #892 (15 min ago). 23 users affected. I\'ve correlated this with 3 customer complaints in #support.', timestamp: '2:15 PM', agent: 'Sentry Monitor' },
-    { id: 'm5', role: 'user', content: 'Should we rollback?', timestamp: '2:16 PM' },
-    { id: 'm6', role: 'agent', content: 'Recommended. Deploy #892 introduced a null check removal in PaymentProcessor.java:142. The rollback would revert just that change. I can create a Linear ticket for the proper fix and notify Marcus (the deployer). Want me to proceed?', timestamp: '2:16 PM', agent: 'Sentry Monitor' },
-  ],
-  'Sales Assistant': [
-    { id: 'm7', role: 'agent', content: 'Morning update: 3 deals need attention today.\n\n1. **Acme Corp** ($45k) — stale 8 days, follow-up drafted\n2. **TechStart** ($12k) — demo scheduled Thursday\n3. **DataFlow** ($28k) — contract review pending\n\nShould I send the Acme follow-up?', timestamp: '9:15 AM', agent: 'Sales Assistant' },
-    { id: 'm8', role: 'user', content: 'Hold on Acme, let me review the email first. Prep the TechStart demo deck.', timestamp: '9:18 AM' },
-    { id: 'm9', role: 'agent', content: "Got it. Acme email is in your Supervised queue for review. I'll pull together the TechStart demo deck — they're most interested in our API integration and analytics features based on the discovery call notes. I'll have it ready in 10 minutes.", timestamp: '9:18 AM', agent: 'Sales Assistant' },
-  ],
 }
 
 interface AgentChatPageProps {
@@ -35,76 +24,131 @@ interface AgentChatPageProps {
 }
 
 export default function AgentChatPage({ onNavigateToSettings }: AgentChatPageProps) {
-  const [agents] = useState(getAgents())
-  const [selectedAgent, setSelectedAgent] = useState(agents[0]?.name || 'Customer Support')
-  const [messages, setMessages] = useState<ChatMessage[]>(MOCK_CONVERSATIONS[selectedAgent] || [])
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [apiKeyError, setApiKeyError] = useState(false)
   const [checkingKeys, setCheckingKeys] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [sendingMessage, setSendingMessage] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Fetch agents on mount
   useEffect(() => {
-    setMessages(MOCK_CONVERSATIONS[selectedAgent] || [])
-  }, [selectedAgent])
+    const fetchAgents = async () => {
+      try {
+        setLoading(true)
+        const response = await apiClient.get<{ agents: Agent[] }>('/api/agents')
+        const agentsList = response.agents || []
+        setAgents(agentsList)
+        
+        if (agentsList.length > 0) {
+          setSelectedAgent(agentsList[0].name)
+          setSelectedAgentId(agentsList[0].id)
+        }
+      } catch (err) {
+        console.error('Error fetching agents:', err)
+        setAgents([])
+      } finally {
+        setLoading(false)
+      }
+    }
 
+    fetchAgents()
+    checkApiKeys()
+  }, [])
+
+  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   // Check for API keys on mount
-  useEffect(() => {
-    const checkApiKeys = async () => {
-      try {
-        const res = await fetch('/api/keys')
-        if (res.ok) {
-          const data = await res.json()
-          setApiKeyError(!data.keys || data.keys.length === 0)
-        } else {
-          setApiKeyError(true)
-        }
-      } catch (error) {
-        console.error('Error checking API keys:', error)
+  const checkApiKeys = async () => {
+    try {
+      const res = await fetch('/api/keys')
+      if (res.ok) {
+        const data = await res.json()
+        setApiKeyError(!data.keys || data.keys.length === 0)
+      } else {
         setApiKeyError(true)
-      } finally {
-        setCheckingKeys(false)
       }
+    } catch (error) {
+      console.error('Error checking API keys:', error)
+      setApiKeyError(true)
+    } finally {
+      setCheckingKeys(false)
     }
-
-    checkApiKeys()
-  }, [])
-
-  const handleSend = () => {
-    if (!input.trim()) return
-
-    if (apiKeyError) {
-      // Don't send if no API key is configured
-      return
-    }
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input,
-      timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-    }
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
-
-    // Simulate agent response
-    setTimeout(() => {
-      const agentMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'agent',
-        content: "I understand. Let me look into that and get back to you with details. I'll check the relevant tools and context.",
-        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-        agent: selectedAgent,
-      }
-      setMessages(prev => [...prev, agentMsg])
-    }, 1500)
   }
 
-  const agentNames = Object.keys(MOCK_CONVERSATIONS)
-  const allAgents = [...new Set([...agentNames, ...agents.map(a => a.name)])]
+  // Update selected agent
+  const handleSelectAgent = (agentName: string, agentId: string) => {
+    setSelectedAgent(agentName)
+    setSelectedAgentId(agentId)
+    setMessages([]) // Clear messages when switching agents
+    setConversationId(null)
+  }
+
+  const handleSend = async () => {
+    if (!input.trim()) return
+    if (apiKeyError) return
+    if (!selectedAgentId) return
+
+    try {
+      setSendingMessage(true)
+
+      const userMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: input,
+        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+      }
+      setMessages(prev => [...prev, userMsg])
+
+      const messageInput = input
+      setInput('')
+
+      // Send message to API
+      const response = await apiClient.post<any>('/api/chat', {
+        content: messageInput,
+        agentId: selectedAgentId,
+        conversationId: conversationId,
+      })
+
+      // Update conversation ID if new
+      if (response.conversationId && !conversationId) {
+        setConversationId(response.conversationId)
+      }
+
+      // Add assistant message
+      if (response.assistantMessage) {
+        const agentMsg: ChatMessage = {
+          id: response.assistantMessage.id,
+          role: 'assistant',
+          content: response.assistantMessage.content,
+          timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+          agent: selectedAgent || undefined,
+        }
+        setMessages(prev => [...prev, agentMsg])
+      }
+    } catch (err) {
+      console.error('Error sending message:', err)
+      // Show error message to user
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ Error sending message: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        agent: selectedAgent || undefined,
+      }
+      setMessages(prev => [...prev, errorMsg])
+    } finally {
+      setSendingMessage(false)
+    }
+  }
 
   return (
     <div className="flex h-full">
@@ -115,31 +159,37 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
           <p className="text-xs text-muted-foreground mt-0.5">Talk to your AI employees</p>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {allAgents.map(name => {
-            const lastMsg = MOCK_CONVERSATIONS[name]?.slice(-1)[0]
-            const isActive = selectedAgent === name
-            return (
-              <button
-                key={name}
-                onClick={() => setSelectedAgent(name)}
-                className={`w-full px-4 py-3.5 text-left border-b border-border/50 transition-all ${
-                  isActive ? 'bg-primary/5 border-l-2 border-l-primary' : 'hover:bg-muted/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                    isActive ? 'bg-purple-100 dark:bg-purple-900/40' : 'bg-muted'
-                  }`}>
-                    <Bot className={`w-4 h-4 ${isActive ? 'text-purple-600' : 'text-muted-foreground'}`} />
+          {agents.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-center p-4">
+              <p className="text-sm text-muted-foreground">No agents available</p>
+            </div>
+          ) : (
+            agents.map(agent => {
+              const name = agent.name
+              const isActive = selectedAgent === name
+              return (
+                <button
+                  key={agent.id}
+                  onClick={() => handleSelectAgent(name, agent.id)}
+                  className={`w-full px-4 py-3.5 text-left border-b border-border/50 transition-all ${
+                    isActive ? 'bg-primary/5 border-l-2 border-l-primary' : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      isActive ? 'bg-purple-100 dark:bg-purple-900/40' : 'bg-muted'
+                    }`}>
+                      <Bot className={`w-4 h-4 ${isActive ? 'text-purple-600' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm font-medium truncate ${isActive ? 'text-foreground' : 'text-foreground'}`}>{name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{agent.model || 'No model'}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-medium truncate ${isActive ? 'text-foreground' : 'text-foreground'}`}>{name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{lastMsg?.content.slice(0, 50) || 'No messages yet'}...</p>
-                  </div>
-                </div>
-              </button>
-            )
-          })}
+                </button>
+              )
+            })
+          )}
         </div>
 
         {/* Channel badges */}
@@ -162,7 +212,7 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
               <Bot className="w-5 h-5 text-purple-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">{selectedAgent}</h3>
+              <h3 className="font-semibold text-foreground">{selectedAgent || 'Select an agent'}</h3>
               <p className="text-xs text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
                 Online · Supervised mode
@@ -178,7 +228,12 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
-          {!checkingKeys && apiKeyError && (
+          {loading && (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+          )}
+          {!loading && !checkingKeys && apiKeyError && (
             <div className="self-center max-w-sm text-center">
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4 mb-4">
                 <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
@@ -193,6 +248,13 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
                   Go to Settings
                 </button>
               </div>
+            </div>
+          )}
+          {!loading && messages.length === 0 && selectedAgent && !apiKeyError && (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Bot className="w-12 h-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-semibold text-foreground mb-2">Chat with {selectedAgent}</p>
+              <p className="text-muted-foreground">Start a conversation to see messages here</p>
             </div>
           )}
           {messages.map(msg => (
@@ -231,16 +293,17 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder={`Message ${selectedAgent}...`}
-              className="flex-1 px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              placeholder={selectedAgent ? `Message ${selectedAgent}...` : 'Select an agent first...'}
+              disabled={!selectedAgent || apiKeyError || sendingMessage}
+              className="flex-1 px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || apiKeyError}
-              title={apiKeyError ? 'No API key configured. Add one in Settings' : ''}
+              disabled={!input.trim() || apiKeyError || !selectedAgent || sendingMessage}
+              title={apiKeyError ? 'No API key configured. Add one in Settings' : !selectedAgent ? 'Select an agent first' : ''}
               className="p-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Send className="w-5 h-5" />
+              {sendingMessage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>
           </div>
         </div>
