@@ -1,201 +1,179 @@
-# Deployment Guide
+# Deployment Checklist - Team Workspaces Feature
 
-## Quick Start: Deploy to Vercel
+**Feature:** Multi-workspace (team) switching and user invitation flow  
+**Date:** 2026-02-13  
+**Status:** Ready for Production
 
-### Step 1: Set Up GitHub Repository
+## Pre-Deployment Steps
 
-```bash
-cd /Users/michaelcopeland/.openclaw/workspace/portal-app
-
-# If not already initialized
-git remote add origin https://github.com/YOUR_USERNAME/portal-app.git
-git branch -M main
-git push -u origin main
-```
-
-### Step 2: Deploy with Vercel CLI
+### 1. Database Migration
+If this is the first deployment of this feature:
 
 ```bash
-# Install Vercel CLI globally (if not already installed)
-npm install -g vercel
+# Apply schema changes to database
+npx prisma migrate deploy
 
-# Login to Vercel
-vercel login
-
-# Deploy from project directory
-cd /Users/michaelcopeland/.openclaw/workspace/portal-app
-vercel --prod
+# OR if creating a new migration:
+npx prisma migrate dev --name add_invitations
 ```
 
-### Step 3: Configure Environment Variables in Vercel
+### 2. Local Verification
+```bash
+# Run TypeScript check
+npx tsc --noEmit --skipLibCheck
 
-When deploying, Vercel will prompt you to add environment variables. Set:
+# Expected: No errors
 
+# Run build locally (optional, long running)
+npm run build
+
+# Expected: Build successful
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
-NEXT_PUBLIC_OPENROUTER_KEY=your_openrouter_key_here (optional)
-NEXT_PUBLIC_APP_NAME=Cloud Employee Portal
+
+### 3. Git Status
+```bash
+git status
+
+# Expected: clean working tree
 ```
 
-### Step 4: Vercel Dashboard Setup (Alternative)
+## Deployment Commands
 
-1. Go to [vercel.com](https://vercel.com)
-2. Click "Add New..." → "Project"
-3. Select the GitHub repository
-4. Configure build settings:
-   - Framework: Next.js
-   - Build Command: `npm run build`
-   - Output Directory: `.next`
-   - Install Command: `npm install`
-5. Add environment variables in "Environment Variables" section
-6. Click "Deploy"
+### Option A: Using Vercel CLI
+```bash
+# Deploy to production with confirmation
+npx vercel --prod --yes
+
+# This will:
+# - Build the project
+# - Run tests
+# - Deploy to production
+# - Generate deployment URL
+```
+
+### Option B: Push to Git (if using Git-based deployment)
+```bash
+git push origin main
+
+# Vercel will automatically detect and deploy
+```
+
+## Post-Deployment Verification
+
+### 1. Check Deployment
+- [ ] Visit deployed app URL
+- [ ] Verify sidebar renders with team switcher
+- [ ] Check team switcher dropdown works
+
+### 2. Test API Endpoints
+```bash
+# Replace YOUR_URL with deployment URL
+
+# List teams (requires auth)
+curl -X GET https://YOUR_URL/api/teams \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Should return array of teams
+```
+
+### 3. Test Invite Flow (manual)
+- [ ] Login to app
+- [ ] Navigate to Team page
+- [ ] Click "Invite Member"
+- [ ] Enter test email and click "Send Invite"
+- [ ] Check for success message
+- [ ] Copy invite link
+- [ ] Open incognito window and visit link
+- [ ] Click "Accept Invitation"
+- [ ] Verify redirect to dashboard
+- [ ] Check that user is now team member
+
+### 4. Monitor Errors
+- [ ] Check Vercel deployment logs for errors
+- [ ] Monitor error tracking service (if configured)
+- [ ] Check browser console for JavaScript errors
+
+## Rollback Plan
+
+If issues occur:
+
+```bash
+# Revert to previous stable version
+git revert HEAD~1  # Adjust number as needed
+git push origin main
+
+# Vercel will automatically redeploy
+```
+
+Or manually rollback in Vercel dashboard:
+1. Go to Vercel project dashboard
+2. Click "Deployments"
+3. Find previous stable deployment
+4. Click "Promote to Production"
 
 ## Environment Variables
 
-### For Local Development
+Ensure these are set in Vercel (Settings > Environment Variables):
 
-```bash
-# Copy .env.example to .env.local
-cp .env.example .env.local
+- `DATABASE_URL` — PostgreSQL connection string
+- `DIRECT_DATABASE_URL` — Direct database connection (Prisma)
+- `NEXTAUTH_SECRET` — Authentication secret
+- Any other existing env vars
 
-# Edit .env.local with your values
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
-NEXT_PUBLIC_OPENROUTER_KEY=your_key_here
-NEXT_PUBLIC_APP_NAME=Cloud Employee Portal
-```
+*Note: Team workspace feature does not require new environment variables*
 
-### For Vercel Deployment
+## Known Limitations & Considerations
 
-Set these in Vercel Project Settings → Environment Variables:
-- All values from .env.example
-- Keep the NEXT_PUBLIC_ prefix
+- **Email Notifications:** Invitations don't trigger email notifications yet (UI ready, backend integration pending)
+- **Invite Link Customization:** Invite links follow pattern `/invite/[token]` (customizable via API response)
+- **Revoke Invitations:** UI shows revoke button but backend hook needs implementation
+- **Team Deletion:** Not included in this version
+- **Bulk Invites:** Not included in this version
 
-## Supabase Setup
+## Team Testing Checklist
 
-### Create a Supabase Project
+If testing with team members:
 
-1. Go to [supabase.com](https://supabase.com)
-2. Create a new project
-3. Get your credentials:
-   - Project URL: Settings → API → Project URL
-   - Anon Key: Settings → API → anon (public) key
-4. Add to environment variables
+- [ ] Admin invites member via Team page
+- [ ] Member receives invite link
+- [ ] Member accepts invitation
+- [ ] Member appears in team member list
+- [ ] Member can switch between teams (if in multiple)
+- [ ] Member cannot invite others (role-based)
+- [ ] Invited email appears in pending invitations
+- [ ] Invite expires after 7 days (or manual revoke)
 
-### Database Schema (SQL)
+## Support & Troubleshooting
 
-```sql
--- Create workspaces table
-CREATE TABLE workspaces (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  owner_id UUID NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+### Issue: Invite link not working
+- Check that `/api/invitations/[token]/accept` endpoint is accessible
+- Verify token is being passed correctly
+- Check invitation hasn't expired (7 day limit)
 
--- Create users table
-CREATE TABLE users (
-  id UUID PRIMARY KEY REFERENCES auth.users,
-  email TEXT NOT NULL,
-  workspace_id UUID REFERENCES workspaces,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+### Issue: Team switcher not loading
+- Check browser localStorage (should see `activeTeamId` key)
+- Verify `/api/teams` endpoint returns teams
+- Check auth token is valid
 
--- Create agents table
-CREATE TABLE agents (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID REFERENCES workspaces,
-  name TEXT NOT NULL,
-  description TEXT,
-  parent_agent_id UUID REFERENCES agents,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+### Issue: Database errors
+- Verify Prisma migration was applied
+- Check `DATABASE_URL` is correct
+- Ensure schema matches current Prisma version
 
--- Create agent_configs table
-CREATE TABLE agent_configs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  agent_id UUID REFERENCES agents,
-  model TEXT NOT NULL,
-  temperature DECIMAL(3,2) DEFAULT 0.7,
-  context_window INTEGER DEFAULT 8000,
-  system_prompt TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+## Contacts
 
--- Create chat_messages table
-CREATE TABLE chat_messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID REFERENCES workspaces,
-  agent_id UUID REFERENCES agents,
-  role TEXT CHECK (role IN ('user', 'assistant')),
-  content TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+For questions or issues:
+- Check `WORKSPACE_FEATURE.md` for technical details
+- Review commit history for implementation details
+- Consult git log for incremental changes
 
--- Create tasks table
-CREATE TABLE tasks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID REFERENCES workspaces,
-  title TEXT NOT NULL,
-  description TEXT,
-  status TEXT CHECK (status IN ('todo', 'doing', 'stuck')),
-  assigned_to UUID REFERENCES users,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+## Deployment Record
 
--- Create usage_metrics table
-CREATE TABLE usage_metrics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID REFERENCES workspaces,
-  agent_id UUID REFERENCES agents,
-  tokens_used INTEGER DEFAULT 0,
-  api_calls INTEGER DEFAULT 0,
-  cost DECIMAL(10,4) DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+**Deployed:** [Deployment Date]  
+**Deployed By:** [Your Name]  
+**Vercel URL:** [Production URL]  
+**Status:** ✅ Live / ⏳ Pending / ❌ Rolled Back
 
-## Testing the Deployment
+---
 
-1. Visit your Vercel deployment URL
-2. Create an account (email/password)
-3. Check all features:
-   - Agent Builder works
-   - Chat messages send
-   - Kanban board tasks drag
-   - LLM config saves
-   - Usage dashboard displays data
-   - Workspace selector switches
-
-## Troubleshooting
-
-### Build Fails
-- Check Node version: `node --version` (should be 18+)
-- Clear cache: `npm run clean` (if script exists) or `rm -rf .next node_modules && npm install`
-- Check for TypeScript errors: `npm run build`
-
-### Environment Variables Not Working
-- Verify variables are set in Vercel Dashboard
-- Check for NEXT_PUBLIC_ prefix for client-side variables
-- Redeploy after updating environment variables
-
-### Supabase Connection Issues
-- Verify NEXT_PUBLIC_SUPABASE_URL is correct
-- Check NEXT_PUBLIC_SUPABASE_ANON_KEY is valid
-- Ensure Supabase project is active
-
-## Post-Deployment
-
-1. **Monitor** - Check Vercel Analytics dashboard
-2. **Logs** - View build and runtime logs in Vercel
-3. **Performance** - Use Web Vitals monitoring
-4. **Updates** - Push to GitHub, Vercel auto-deploys on main branch
-
-## Rollback
-
-To rollback to a previous deployment:
-1. Go to Vercel Dashboard
-2. Click "Deployments"
-3. Find the previous successful deployment
-4. Click "..." and select "Promote to Production"
+*Last Updated: 2026-02-13*
