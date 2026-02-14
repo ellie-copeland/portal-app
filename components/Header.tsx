@@ -43,9 +43,11 @@ interface HeaderProps {
   onNavigate: (page: PageType) => void
   darkMode: boolean
   onToggleDark: () => void
+  onSignOut?: () => void
+  user?: any
 }
 
-export default function Header({ onNavigate, darkMode, onToggleDark }: HeaderProps) {
+export default function Header({ onNavigate, darkMode, onToggleDark, onSignOut, user }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS)
@@ -147,12 +149,23 @@ export default function Header({ onNavigate, darkMode, onToggleDark }: HeaderPro
             )}
           </div>
 
+          {/* Sign out */}
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 rounded-lg hover:bg-muted transition-colors"
+            >
+              Sign out
+            </button>
+          )}
+
           {/* User avatar */}
           <button
             onClick={() => onNavigate('settings' as PageType)}
             className="w-8 h-8 bg-gradient-to-br from-purple-500 to-teal-400 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+            title={user?.email || 'Settings'}
           >
-            U
+            {user?.name?.[0]?.toUpperCase() || 'U'}
           </button>
         </div>
       </header>
