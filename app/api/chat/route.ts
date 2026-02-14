@@ -243,8 +243,26 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return result.toTextStreamResponse({
+    // Stream plain text chunks (not AI SDK protocol format)
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder()
+        try {
+          for await (const chunk of result.textStream) {
+            controller.enqueue(encoder.encode(chunk))
+          }
+        } catch (err) {
+          console.error('Stream error:', err)
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
       headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
         'X-Conversation-Id': convId!,
       },
     })
