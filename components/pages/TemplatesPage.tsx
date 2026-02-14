@@ -10,10 +10,16 @@ interface Template {
   description: string
   model: string
   category: 'engineering' | 'sales' | 'devops' | 'productivity' | 'support' | 'marketing'
-  avatar: string
+  avatar?: string
+  avatarUrl?: string
   integrations: string[]
   constraints: string[]
   role: string
+}
+
+// Helper function to generate dicebear avatar URL
+function getDicebearAvatarUrl(seed: string): string {
+  return `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${encodeURIComponent(seed)}`
 }
 
 const DEFAULT_TEMPLATES: Template[] = [
@@ -335,17 +341,21 @@ export default function TemplatesPage() {
               className="bg-card border border-border/80 rounded-xl p-6 shadow-sm hover:shadow-lg hover:border-primary/30 transition-all group"
             >
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 flex items-center justify-center text-2xl flex-shrink-0">
-                  {template.avatar}
+                <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-purple-200 dark:border-purple-700 flex-shrink-0 overflow-hidden">
+                  <img
+                    src={getDicebearAvatarUrl(template.name)}
+                    alt={template.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-foreground text-lg mb-1">{template.name}</h3>
                   <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
 
                   {/* Persona */}
-                  <div className="bg-muted/50 rounded-lg px-3 py-2 mb-3">
-                    <p className="text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">Persona:</span> {template.persona}
+                  <div className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg px-3 py-2.5 mb-3">
+                    <p className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">
+                      {template.persona}
                     </p>
                   </div>
 
