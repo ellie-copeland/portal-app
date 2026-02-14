@@ -34,13 +34,13 @@ export const SLACK_CONFIG: IntegrationConfig = {
   id: 'slack',
   name: 'Slack',
   icon: '💬',
-  description: 'Monitor channels, respond to mentions, and send proactive alerts',
+  description: 'Connect Slack workspace. Clawdbot routes Slack messages to your AI employees.',
   category: 'communication',
   type: 'oauth',
   steps: [
     {
       title: 'Slack Permissions',
-      description: 'We need permission to monitor channels and send messages',
+      description: 'Grant permissions to monitor channels and send messages',
       fields: [
         {
           name: 'permissions',
@@ -54,14 +54,14 @@ export const SLACK_CONFIG: IntegrationConfig = {
           ],
         },
       ],
-      help: 'These permissions allow your AI employees to monitor conversations and respond to mentions.',
+      help: 'Clawdbot (our platform) needs these permissions to monitor conversations and let AI employees respond to mentions. No data leaves our system.',
       links: [
         { label: 'Create a Slack App', url: 'https://api.slack.com/apps' },
       ],
     },
     {
-      title: 'Connect with Slack',
-      description: 'Click below to authorize the app',
+      title: 'Authorize with Slack',
+      description: 'Connect your Slack workspace',
       fields: [
         {
           name: 'oauth_action',
@@ -73,11 +73,11 @@ export const SLACK_CONFIG: IntegrationConfig = {
           ],
         },
       ],
-      help: 'You\'ll be redirected to Slack to approve the connection. NOTE: Requires OAuth app configuration at https://api.slack.com/apps',
+      help: 'You\'ll be redirected to Slack to approve. Requires OAuth app configured at https://api.slack.com/apps',
     },
     {
       title: 'Select Channels',
-      description: 'Choose which channels to monitor',
+      description: 'Choose which channels your AI employees will monitor',
       fields: [
         {
           name: 'channels',
@@ -88,7 +88,7 @@ export const SLACK_CONFIG: IntegrationConfig = {
           validation: (value) => value?.length > 0 ? null : 'Select at least one channel',
         },
       ],
-      help: 'Your AI employees will monitor these channels for mentions and keywords.',
+      help: 'Messages in these channels will be routed through Clawdbot to your selected agents.',
     },
   ],
 }
@@ -461,68 +461,51 @@ export const WHATSAPP_CONFIG: IntegrationConfig = {
   id: 'whatsapp',
   name: 'WhatsApp',
   icon: '📱',
-  description: 'Chat with AI employees directly via WhatsApp Business',
+  description: 'Connect your WhatsApp device to chat with AI employees. Clawdbot generates a pairing QR code.',
   category: 'communication',
   type: 'bot-token',
   steps: [
     {
-      title: 'WhatsApp Business Setup',
-      description: 'Set up WhatsApp Business API access',
+      title: 'Pair WhatsApp Device',
+      description: 'Clawdbot will generate a QR code to pair your WhatsApp device',
       fields: [
         {
-          name: 'guide',
-          label: 'Setup Guide',
+          name: 'qr_info',
+          label: 'How it works',
           type: 'text',
-          placeholder: 'Follow the setup guide to get your business account',
+          placeholder: 'Keep your WhatsApp open and ready',
         },
       ],
-      help: 'You need a WhatsApp Business API account. Click below for setup details.',
-      links: [
-        { label: 'WhatsApp Business API', url: 'https://www.whatsapp.com/business/api' },
-      ],
+      help: 'Clawdbot (our platform) acts as the middleware between WhatsApp and your AI employees. When you click "Generate QR Code" below, scan it with WhatsApp on your phone to pair this account. No Business API account needed.',
     },
     {
-      title: 'WhatsApp Credentials',
-      description: 'Enter your WhatsApp Business API credentials',
+      title: 'Select Agent',
+      description: 'Choose which AI employee handles WhatsApp messages',
       fields: [
         {
-          name: 'phone_id',
-          label: 'Phone Number ID',
-          type: 'text',
-          placeholder: 'Your phone number ID',
+          name: 'agentId',
+          label: 'Agent',
+          type: 'select',
           required: true,
-          validation: (value) => {
-            if (!value || value.trim().length === 0) return 'Phone ID is required'
-            if (!/^\d+$/.test(value)) return 'Phone ID should contain only numbers'
-            return null
-          },
-        },
-        {
-          name: 'access_token',
-          label: 'Access Token',
-          type: 'textarea',
-          placeholder: 'Your WhatsApp Business API access token',
-          required: true,
-          validation: (value) => {
-            if (!value || value.trim().length === 0) return 'Access token is required'
-            return null
-          },
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
         },
       ],
-      help: 'Find these in your WhatsApp Business App settings under API Setup.',
+      help: 'Messages from WhatsApp will be routed to this agent for responses.',
     },
     {
-      title: 'Webhook Configuration',
-      description: 'Configure WhatsApp to send messages to your AI',
+      title: 'Confirm Connection',
+      description: 'Review your WhatsApp integration settings',
       fields: [
         {
-          name: 'webhook_url',
-          label: 'Webhook URL',
-          type: 'text',
-          placeholder: '',
+          name: 'confirm',
+          label: 'Ready',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: 'Yes, connect WhatsApp to this agent', value: 'confirmed' }],
         },
       ],
-      help: 'Copy this URL and paste it in WhatsApp Business settings > Webhooks > Callback URL',
+      help: 'Once confirmed, your WhatsApp messages will flow through Clawdbot to your selected agent.',
     },
   ],
 }
@@ -531,57 +514,73 @@ export const TELEGRAM_CONFIG: IntegrationConfig = {
   id: 'telegram',
   name: 'Telegram',
   icon: '✈️',
-  description: 'Receive alerts and chat with agents via Telegram bot',
+  description: 'Connect your Telegram bot to chat with AI employees. Clawdbot handles the routing.',
   category: 'communication',
   type: 'bot-token',
   steps: [
     {
       title: 'Create Telegram Bot',
-      description: 'Create a bot using BotFather',
+      description: 'Get a bot token from Telegram BotFather',
       fields: [
         {
-          name: 'guide',
+          name: 'instructions',
           label: 'Instructions',
           type: 'text',
-          placeholder: 'Message @BotFather on Telegram to create a new bot',
+          placeholder: 'Message @BotFather on Telegram',
         },
       ],
-      help: 'Open Telegram and chat with @BotFather to create your bot. Save the token you receive.',
+      help: 'Open Telegram and message @BotFather to create a new bot. He will give you a token. Copy and paste it in the next step.',
       links: [
-        { label: 'Open Telegram', url: 'https://t.me/BotFather' },
+        { label: 'Open BotFather on Telegram', url: 'https://t.me/BotFather' },
       ],
     },
     {
-      title: 'Bot Token',
-      description: 'Paste your Telegram bot token',
+      title: 'Enter Bot Token',
+      description: 'Paste your Telegram bot token from BotFather',
       fields: [
         {
           name: 'bot_token',
           label: 'Bot Token',
           type: 'textarea',
-          placeholder: 'Paste the token from BotFather',
+          placeholder: 'e.g., 123456789:ABCdefGHIjklmno...',
           required: true,
           validation: (value) => {
             if (!value || value.trim().length === 0) return 'Bot token is required'
-            if (!value.includes(':')) return 'Invalid bot token format'
+            if (!value.includes(':')) return 'Invalid bot token format (should contain a colon)'
             return null
           },
         },
       ],
-      help: 'This token is provided by @BotFather when you create your bot.',
+      help: 'Clawdbot (our platform) acts as the middleware between Telegram and your AI employees. We\'ll handle all the webhook setup.',
     },
     {
-      title: 'Webhook Configuration',
-      description: 'Configure Telegram to send updates to your AI',
+      title: 'Select Agent',
+      description: 'Choose which AI employee handles Telegram messages',
       fields: [
         {
-          name: 'webhook_url',
-          label: 'Webhook URL',
-          type: 'text',
-          placeholder: '',
+          name: 'agentId',
+          label: 'Agent',
+          type: 'select',
+          required: true,
+          options: [],
+          validation: (value) => value ? null : 'Select an agent',
         },
       ],
-      help: 'Copy this webhook URL to set up message forwarding in your Telegram bot settings.',
+      help: 'Messages from your Telegram bot will be routed to this agent for responses.',
+    },
+    {
+      title: 'Confirm Connection',
+      description: 'Review your Telegram integration settings',
+      fields: [
+        {
+          name: 'confirm',
+          label: 'Ready',
+          type: 'checkbox',
+          required: true,
+          options: [{ label: 'Yes, connect Telegram to this agent', value: 'confirmed' }],
+        },
+      ],
+      help: 'Once confirmed, Telegram messages will flow through Clawdbot to your selected agent.',
     },
   ],
 }
