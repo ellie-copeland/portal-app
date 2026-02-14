@@ -5,6 +5,7 @@ import { getUserApiKey } from '@/lib/llm'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { streamText, tool, stepCountIs, zodSchema } from 'ai'
 import { z } from 'zod'
@@ -77,9 +78,10 @@ function cleanModel(model: string): string {
   return MODEL_ID_MAP[stripped] || stripped
 }
 
-function detectProvider(model: string): 'anthropic' | 'openai' | 'openrouter' {
+function detectProvider(model: string): 'anthropic' | 'openai' | 'google' | 'openrouter' {
   if (model.startsWith('claude') || model.startsWith('anthropic/')) return 'anthropic'
   if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('openai/')) return 'openai'
+  if (model.startsWith('gemini') || model.startsWith('google/')) return 'google'
   return 'openrouter'
 }
 
@@ -96,6 +98,11 @@ function getProviderForModel(model: string, apiKey: string) {
   if (provider === 'openai') {
     const openai = createOpenAI({ apiKey })
     return openai(modelId)
+  }
+
+  if (provider === 'google') {
+    const google = createGoogleGenerativeAI({ apiKey })
+    return google(modelId)
   }
 
   // Fallback: OpenRouter for everything else

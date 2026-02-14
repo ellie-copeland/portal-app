@@ -84,6 +84,31 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
     fetchKeys()
   }, [])
 
+  // When providers load, update default model to first available if current isn't in the list
+  useEffect(() => {
+    if (userProviders.length > 0 && !agent) {
+      const visibleGroups = new Set<string>()
+      userProviders.forEach(p => {
+        const groups = PROVIDER_TO_MODEL_GROUPS[p] || [p]
+        groups.forEach(g => visibleGroups.add(g))
+      })
+      const firstGroup = Object.entries(MODEL_OPTIONS).find(([key]) => visibleGroups.has(key))
+      if (firstGroup && firstGroup[1].models.length > 0) {
+        const firstModel = firstGroup[1].models[0]
+        setFormData(prev => {
+          // Only update if current model isn't in any visible group
+          const allVisible = Object.entries(MODEL_OPTIONS)
+            .filter(([key]) => visibleGroups.has(key))
+            .flatMap(([, g]) => g.models)
+          if (!allVisible.includes(prev.model)) {
+            return { ...prev, model: firstModel }
+          }
+          return prev
+        })
+      }
+    }
+  }, [userProviders, agent])
+
   // Filter MODEL_OPTIONS based on user's configured providers
   const filteredModelOptions = (() => {
     if (userProviders.length === 0) return MODEL_OPTIONS // show all if no keys yet (or still loading)
@@ -102,7 +127,7 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
   const [formData, setFormData] = useState({
     name: '',
     type: 'MAIN' as 'MAIN' | 'SUB',
-    model: 'gpt-4',
+    model: 'gpt-4o-mini',
     description: '',
     constraints: [] as string[],
     role: 'Support Manager',
