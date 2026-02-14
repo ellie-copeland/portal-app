@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 })
     }
 
-    const { email, password, name } = parsed.data
+    const email = parsed.data.email.toLowerCase().trim()
+    const { password, name } = parsed.data
 
     // Check if user already exists
     const existing = await prisma.user.findUnique({ where: { email } })

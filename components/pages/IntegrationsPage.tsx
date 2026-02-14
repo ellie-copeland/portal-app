@@ -1,7 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, ExternalLink, RefreshCw, Settings, Wifi, WifiOff, Zap } from 'lucide-react'
+import IntegrationWizard from '@/components/IntegrationWizard'
+import { INTEGRATION_CONFIGS } from '@/lib/integration-configs'
+
+interface DBIntegration {
+  id: string
+  provider: string
+  status: string
+  metadata: Record<string, any>
+  createdAt: string
+  updatedAt: string
+}
 
 interface Integration {
   id: string
@@ -15,119 +26,27 @@ interface Integration {
   channels?: string[]
 }
 
-const MOCK_INTEGRATIONS: Integration[] = [
-  {
-    id: 'slack',
-    name: 'Slack',
-    icon: '💬',
-    description: 'Monitor channels, respond to mentions, and send proactive alerts',
-    status: 'connected',
-    category: 'communication',
-    eventsToday: 247,
-    lastSync: '30s ago',
-    channels: ['#support', '#engineering', '#sales', '#general'],
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    icon: '🐙',
-    description: 'Review PRs, monitor commits, track issues, and automate workflows',
-    status: 'connected',
-    category: 'development',
-    eventsToday: 83,
-    lastSync: '2 min ago',
-    channels: ['assistable-v2', 'a2p-wizard', 'tensol-v2'],
-  },
-  {
-    id: 'sentry',
-    name: 'Sentry',
-    icon: '🛡️',
-    description: 'Monitor errors, correlate with deployments, and alert on-call engineers',
-    status: 'connected',
-    category: 'monitoring',
-    eventsToday: 12,
-    lastSync: '1 min ago',
-    channels: ['assistable-prod', 'tensol-prod'],
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    icon: '📋',
-    description: 'Track issues, create tickets from alerts, and sync project status',
-    status: 'connected',
-    category: 'productivity',
-    eventsToday: 34,
-    lastSync: '5 min ago',
-    channels: ['Engineering', 'Product'],
-  },
-  {
-    id: 'hubspot',
-    name: 'HubSpot',
-    icon: '🔶',
-    description: 'Auto-log calls, update deal stages, and track customer interactions',
-    status: 'connected',
-    category: 'crm',
-    eventsToday: 56,
-    lastSync: '3 min ago',
-    channels: ['142 active deals'],
-  },
-  {
-    id: 'gmail',
-    name: 'Gmail',
-    icon: '📧',
-    description: 'Monitor inboxes, draft responses, and flag urgent emails',
-    status: 'connected',
-    category: 'communication',
-    eventsToday: 89,
-    lastSync: '1 min ago',
-    channels: ['3 inboxes monitored'],
-  },
-  {
-    id: 'whatsapp',
-    name: 'WhatsApp',
-    icon: '📱',
-    description: 'Chat with AI employees directly via WhatsApp Business',
-    status: 'disconnected',
-    category: 'communication',
-    eventsToday: 0,
-    lastSync: 'Never',
-  },
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    icon: '✈️',
-    description: 'Receive alerts and chat with agents via Telegram bot',
-    status: 'disconnected',
-    category: 'communication',
-    eventsToday: 0,
-    lastSync: 'Never',
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    icon: '📝',
-    description: 'Sync knowledge base, create pages from conversations, and track docs',
-    status: 'disconnected',
-    category: 'productivity',
-    eventsToday: 0,
-    lastSync: 'Never',
-  },
-  {
-    id: 'vercel',
-    name: 'Vercel',
-    icon: '▲',
-    description: 'Monitor deployments, track build status, and correlate with errors',
-    status: 'connected',
-    category: 'development',
-    eventsToday: 7,
-    lastSync: '10 min ago',
-  },
+// Map all 10 services
+const SERVICE_CONFIGS = [
+  { id: 'slack', name: 'Slack', icon: '💬', category: 'communication' },
+  { id: 'github', name: 'GitHub', icon: '🐙', category: 'development' },
+  { id: 'sentry', name: 'Sentry', icon: '🛡️', category: 'monitoring' },
+  { id: 'linear', name: 'Linear', icon: '📋', category: 'productivity' },
+  { id: 'hubspot', name: 'HubSpot', icon: '🔶', category: 'crm' },
+  { id: 'gmail', name: 'Gmail', icon: '📧', category: 'communication' },
+  { id: 'whatsapp', name: 'WhatsApp', icon: '📱', category: 'communication' },
+  { id: 'telegram', name: 'Telegram', icon: '✈️', category: 'communication' },
+  { id: 'notion', name: 'Notion', icon: '📝', category: 'productivity' },
+  { id: 'vercel', name: 'Vercel', icon: '▲', category: 'development' },
 ]
 
 const statusConfig = {
   connected: { color: 'text-emerald-500', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', label: 'Connected' },
   disconnected: { color: 'text-gray-400', bg: 'bg-gray-50 border-gray-200', dot: 'bg-gray-300', label: 'Not Connected' },
   error: { color: 'text-red-500', bg: 'bg-red-50 border-red-200', dot: 'bg-red-500', label: 'Error' },
+  CONNECTED: { color: 'text-emerald-500', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', label: 'Connected' },
+  DISCONNECTED: { color: 'text-gray-400', bg: 'bg-gray-50 border-gray-200', dot: 'bg-gray-300', label: 'Not Connected' },
+  ERROR: { color: 'text-red-500', bg: 'bg-red-50 border-red-200', dot: 'bg-red-500', label: 'Error' },
 }
 
 const categories = [
@@ -140,8 +59,63 @@ const categories = [
 ]
 
 export default function IntegrationsPage() {
-  const [integrations] = useState<Integration[]>(MOCK_INTEGRATIONS)
+  const [integrations, setIntegrations] = useState<Integration[]>([])
+  const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
+  const [wizardId, setWizardId] = useState<string | null>(null)
+
+  // Load integrations from API
+  useEffect(() => {
+    const loadIntegrations = async () => {
+      try {
+        const response = await fetch('/api/integrations')
+        if (!response.ok) throw new Error('Failed to fetch')
+
+        const dbIntegrations: DBIntegration[] = await response.json()
+        const dbMap = new Map(dbIntegrations.map(i => [i.provider, i]))
+
+        // Build integration list from service configs
+        const integrationsList = SERVICE_CONFIGS.map(service => {
+          const config = INTEGRATION_CONFIGS[service.id]
+          const dbIntegration = dbMap.get(service.id)
+          const dbStatus = dbIntegration?.status.toLowerCase() as 'connected' | 'disconnected' | 'error' | undefined
+
+          return {
+            id: service.id,
+            name: service.name,
+            icon: service.icon,
+            description: config?.description || '',
+            status: dbStatus || 'disconnected',
+            category: service.category as any,
+            eventsToday: 0,
+            lastSync: dbIntegration ? 'Just now' : 'Never',
+            channels: dbIntegration?.metadata?.channels || [],
+          }
+        })
+
+        setIntegrations(integrationsList)
+      } catch (error) {
+        console.error('Failed to load integrations:', error)
+        // Fall back to empty list
+        setIntegrations(
+          SERVICE_CONFIGS.map(service => ({
+            id: service.id,
+            name: service.name,
+            icon: service.icon,
+            description: INTEGRATION_CONFIGS[service.id]?.description || '',
+            status: 'disconnected',
+            category: service.category as any,
+            eventsToday: 0,
+            lastSync: 'Never',
+          }))
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadIntegrations()
+  }, [])
 
   const filtered = activeCategory === 'all'
     ? integrations
@@ -206,7 +180,15 @@ export default function IntegrationsPage() {
 
       {/* Integration Cards */}
       <div className="flex-1 overflow-auto p-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <RefreshCw className="w-8 h-8 text-muted-foreground animate-spin mx-auto mb-2" />
+              <p className="text-muted-foreground">Loading integrations...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(integration => {
             const config = statusConfig[integration.status]
             return (
@@ -240,7 +222,10 @@ export default function IntegrationsPage() {
                           Synced <strong className="text-foreground">{integration.lastSync}</strong>
                         </span>
                       </div>
-                      <button className="p-2 rounded-lg hover:bg-muted transition-colors">
+                      <button
+                        onClick={() => setWizardId(integration.id)}
+                        className="p-2 rounded-lg hover:bg-muted transition-colors"
+                      >
                         <Settings className="w-4 h-4 text-muted-foreground" />
                       </button>
                     </div>
@@ -256,7 +241,10 @@ export default function IntegrationsPage() {
                   </div>
                 ) : (
                   <div className="mt-4 pt-4 border-t border-border/50">
-                    <button className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setWizardId(integration.id)}
+                      className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                    >
                       <ExternalLink className="w-4 h-4" />
                       Connect {integration.name}
                     </button>
@@ -265,8 +253,22 @@ export default function IntegrationsPage() {
               </div>
             )
           })}
-        </div>
+            </div>
+        )}
       </div>
+
+      {/* Integration Wizard Modal */}
+      {wizardId && (
+        <IntegrationWizard
+          integrationId={wizardId}
+          onClose={() => setWizardId(null)}
+          onConnected={() => {
+            setWizardId(null)
+            // Reload integrations
+            window.location.reload()
+          }}
+        />
+      )}
     </div>
   )
 }

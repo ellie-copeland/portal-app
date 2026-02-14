@@ -370,17 +370,19 @@ enum TaskPriority {
 // ============================================
 
 model Integration {
-  id           String            @id @default(cuid())
-  teamId       String
-  provider     String            // slack, github, hubspot, sentry, etc.
-  status       IntegrationStatus @default(DISCONNECTED)
-  accessToken  String?           @db.Text // Encrypted
-  refreshToken String?           @db.Text // Encrypted
-  tokenExpiry  DateTime?
-  config       Json?
-  metadata     Json?             // Provider-specific data (workspace name, etc.)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id                String            @id @default(cuid())
+  teamId            String
+  provider          String            // slack, github, hubspot, sentry, etc.
+  status            IntegrationStatus @default(DISCONNECTED)
+  accessToken       String?           @db.Text // Encrypted
+  refreshToken      String?           @db.Text // Encrypted
+  tokenExpiry       DateTime?
+  encryptedConfig   String?           @db.Text // Encrypted configuration
+  config            Json?
+  metadata          Json?             // Provider-specific data (workspace name, etc.)
+  lastSyncAt        DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 

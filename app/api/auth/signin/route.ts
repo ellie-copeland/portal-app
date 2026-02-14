@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 })
     }
 
-    const { email, password } = parsed.data
+    const email = parsed.data.email.toLowerCase().trim()
+    const { password } = parsed.data
 
     const user = await prisma.user.findUnique({
       where: { email },
