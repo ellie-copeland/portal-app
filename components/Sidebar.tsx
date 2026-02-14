@@ -1,8 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PageType } from '@/app/page'
-import { LayoutDashboard, Zap, MessageSquare, Users, Activity, Link2, CreditCard, BookTemplate, Menu, X, Eye, AlertTriangle, MessageCircle, Rocket, Shield, Settings, UserPlus } from 'lucide-react'
+import { LayoutDashboard, Zap, MessageSquare, Users, Activity, Link2, CreditCard, BookTemplate, Menu, X, Eye, AlertTriangle, MessageCircle, Rocket, Shield, Settings, UserPlus, ChevronDown, Plus } from 'lucide-react'
+
+interface Team {
+  id: string
+  name: string
+}
 
 interface SidebarProps {
   currentPage: PageType
@@ -11,6 +16,71 @@ interface SidebarProps {
 
 export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [teams, setTeams] = useState<Team[]>([])
+  const [currentTeam, setCurrentTeam] = useState<Team | null>(null)
+  const [showTeamDropdown, setShowTeamDropdown] = useState(false)
+  const [loadingTeams, setLoadingTeams] = useState(true)
+
+  // Load teams on mount
+  useEffect(() => {
+    const loadTeams = async () => {
+      try {
+        const response = await fetch('/api/teams')
+        if (response.ok) {
+          const data = await response.json()
+          setTeams(data)
+
+          // Load active team from localStorage
+          const savedTeamId = localStorage.getItem('activeTeamId')
+          const activeTeam = savedTeamId
+            ? data.find((t: Team) => t.id === savedTeamId) || data[0]
+            : data[0]
+          
+          if (activeTeam) {
+            setCurrentTeam(activeTeam)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load teams:', error)
+      } finally {
+        setLoadingTeams(false)
+      }
+    }
+
+    loadTeams()
+  }, [])
+
+  // Save active team to localStorage when changed
+  const handleTeamChange = (team: Team) => {
+    setCurrentTeam(team)
+    localStorage.setItem('activeTeamId', team.id)
+    setShowTeamDropdown(false)
+  }
+
+  const handleCreateTeam = async () => {
+    const teamName = prompt('Enter team name:')
+    if (!teamName) return
+
+    try {
+      const response = await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: teamName }),
+      })
+
+      if (response.ok) {
+        const newTeam = await response.json()
+        const newTeamData = { id: newTeam.id, name: newTeam.name }
+        setTeams([...teams, newTeamData])
+        setCurrentTeam(newTeamData)
+        localStorage.setItem('activeTeamId', newTeamData.id)
+        setShowTeamDropdown(false)
+      }
+    } catch (error) {
+      console.error('Failed to create team:', error)
+      alert('Failed to create team')
+    }
+  }
 
   const sections = [
     {
@@ -58,7 +128,7 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
     <>
       {/* Header */}
       <div className="p-5 border-b border-border">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-teal-400 rounded-xl flex items-center justify-center shadow-sm">
             <Zap className="w-5 h-5 text-white" />
           </div>
@@ -66,6 +136,52 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
             <h1 className="font-bold text-lg text-foreground">Portal</h1>
             <p className="text-xs text-muted-foreground">AI Employee Platform</p>
           </div>
+        </div>
+
+        {/* Team Switcher */}
+        <div className="relative">
+          <button
+            onClick={() => setShowTeamDropdown(!showTeamDropdown)}
+            className="w-full px-3 py-2.5 bg-muted/50 hover:bg-muted border border-border rounded-lg flex items-center justify-between gap-2 transition-colors"
+          >
+            <div className="text-left flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground">Team</p>
+              <p className="text-sm font-medium text-foreground truncate">
+                {loadingTeams ? 'Loading...' : currentTeam?.name || 'Select team'}
+              </p>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${showTeamDropdown ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Team Dropdown */}
+          {showTeamDropdown && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+              <div className="max-h-48 overflow-y-auto">
+                {teams.map((team) => (
+                  <button
+                    key={team.id}
+                    onClick={() => handleTeamChange(team)}
+                    className={`w-full px-3 py-2.5 text-left text-sm transition-colors border-b border-border/50 last:border-b-0 ${
+                      currentTeam?.id === team.id
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    {team.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Create Team Button */}
+              <button
+                onClick={handleCreateTeam}
+                className="w-full px-3 py-2.5 text-left text-sm text-primary hover:bg-primary/5 border-t border-border flex items-center gap-2 font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create Team
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
