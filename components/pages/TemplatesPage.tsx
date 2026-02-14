@@ -1,8 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Plus, Sparkles, Bot } from 'lucide-react'
-import { saveAgents, getAgents, Agent } from '@/lib/store'
 
 interface Template {
   id: string
@@ -17,7 +16,7 @@ interface Template {
   role: string
 }
 
-const TEMPLATES: Template[] = [
+const DEFAULT_TEMPLATES: Template[] = [
   {
     id: 't-1',
     name: 'Linear Ticket Solver',
@@ -193,11 +192,40 @@ const integrationColors: Record<string, string> = {
 }
 
 export default function TemplatesPage() {
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [deployed, setDeployed] = useState<Set<string>>(new Set())
 
-  const filtered = TEMPLATES.filter(t => {
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
+
+  const fetchTemplates = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+      const res = await fetch('/api/templates', { headers })
+      if (!res.ok) throw new Error('Failed to fetch templates')
+      const data = await res.json()
+      setTemplates(data.templates || DEFAULT_TEMPLATES)
+    } catch (err) {
+      console.error('Error fetching templates:', err)
+      // Fall back to default templates
+      setTemplates(DEFAULT_TEMPLATES)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = templates.filter(t => {
     if (activeCategory !== 'all' && t.category !== activeCategory) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -206,20 +234,26 @@ export default function TemplatesPage() {
     return true
   })
 
-  const handleDeploy = (template: Template) => {
-    const agents = getAgents()
-    const newAgent: Agent = {
-      id: Date.now().toString(),
-      name: template.name,
-      type: 'sub',
-      llm: template.model,
-      status: 'active',
-      description: template.description,
-      constraints: template.constraints,
-      role: template.role,
+  const handleDeploy = async (template: Template) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+
+      const res = await fetch('/api/agents/v2/from-template', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ templateId: template.id }),
+      })
+
+      if (!res.ok) throw new Error('Failed to deploy template')
+      setDeployed(prev => new Set(prev).add(template.id))
+    } catch (err) {
+      console.error('Error deploying template:', err)
+      setError(err instanceof Error ? err.message : 'Failed to deploy template')
     }
-    saveAgents([...agents, newAgent])
-    setDeployed(prev => new Set(prev).add(template.id))
   }
 
   return (
@@ -267,20 +301,34 @@ export default function TemplatesPage() {
         </div>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <div className="mx-6 sm:mx-8 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+        </div>
+      )}
+
       {/* Templates Grid */}
       <div className="flex-1 overflow-auto p-6 sm:p-8">
-        {activeCategory !== 'all' && (
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-foreground">
-              {categories.find(c => c.id === activeCategory)?.label}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {filtered.length} template{filtered.length !== 1 ? 's' : ''} available
-            </p>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading templates...</p>
           </div>
-        )}
+        ) : (
+          <>
+            {activeCategory !== 'all' && (
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-foreground">
+                  {categories.find(c => c.id === activeCategory)?.label}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {filtered.length} template{filtered.length !== 1 ? 's' : ''} available
+                </p>
+              </div>
+            )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(template => (
             <div
               key={template.id}
@@ -335,7 +383,9 @@ export default function TemplatesPage() {
               </div>
             </div>
           ))}
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

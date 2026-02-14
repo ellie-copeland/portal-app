@@ -3,35 +3,103 @@
 import { useState, useEffect } from 'react'
 import { Plus, Bot, Cpu, Pencil, Trash2 } from 'lucide-react'
 import AgentForm from '@/components/AgentForm'
-import { Agent, getAgents, saveAgents } from '@/lib/store'
+
+interface Agent {
+  id: string
+  name: string
+  type: 'main' | 'sub'
+  llm: string
+  status: 'active' | 'inactive'
+  description: string
+  constraints: string[]
+  role: string
+}
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setAgents(getAgents())
+    fetchAgents()
   }, [])
 
-  useEffect(() => {
-    if (agents.length > 0) saveAgents(agents)
-  }, [agents])
-
-  const handleAddAgent = (agentData: any) => {
-    let updated: Agent[]
-    if (editingAgent) {
-      updated = agents.map(a => a.id === editingAgent.id ? { ...agentData, id: editingAgent.id } : a)
-      setEditingAgent(null)
-    } else {
-      updated = [...agents, { ...agentData, id: Date.now().toString() }]
+  const fetchAgents = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+      const res = await fetch('/api/agents', { headers })
+      if (!res.ok) throw new Error('Failed to fetch agents')
+      const data = await res.json()
+      setAgents(data.agents || [])
+    } catch (err) {
+      console.error('Error fetching agents:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load agents')
+    } finally {
+      setLoading(false)
     }
-    setAgents(updated)
-    setShowForm(false)
   }
 
-  const handleDeleteAgent = (id: string) => {
-    setAgents(agents.filter(a => a.id !== id))
+  const handleAddAgent = async (agentData: any) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+
+      let res
+      if (editingAgent) {
+        res = await fetch(`/api/agents/${editingAgent.id}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(agentData),
+        })
+      } else {
+        res = await fetch('/api/agents', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(agentData),
+        })
+      }
+
+      if (!res.ok) throw new Error('Failed to save agent')
+      
+      setEditingAgent(null)
+      setShowForm(false)
+      await fetchAgents()
+    } catch (err) {
+      console.error('Error saving agent:', err)
+      setError(err instanceof Error ? err.message : 'Failed to save agent')
+    }
+  }
+
+  const handleDeleteAgent = async (id: string) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+      
+      const res = await fetch(`/api/agents/${id}`, {
+        method: 'DELETE',
+        headers,
+      })
+      
+      if (!res.ok) throw new Error('Failed to delete agent')
+      await fetchAgents()
+    } catch (err) {
+      console.error('Error deleting agent:', err)
+      setError(err instanceof Error ? err.message : 'Failed to delete agent')
+    }
   }
 
   return (
@@ -69,9 +137,21 @@ export default function AgentsPage() {
         </div>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <div className="mx-8 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 overflow-auto p-8">
-        {showForm ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading agents...</p>
+          </div>
+        ) : showForm ? (
           <div className="max-w-2xl">
             <AgentForm
               agent={editingAgent}

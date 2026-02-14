@@ -1,7 +1,21 @@
 'use client'
 
-import { useState } from 'react'
-import { CheckCircle2, Clock, Eye, EyeOff, MessageSquare, Shield, Sparkles, ThumbsDown, ThumbsUp, XCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CheckCircle2, Clock, Eye, EyeOff, MessageSquare, Shield, Sparkles, ThumbsDown, ThumbsUp, XCircle, Loader2 } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
+
+interface ExecutionRecord {
+  id: string
+  agentName?: string
+  agent?: { name: string }
+  status: 'success' | 'failed' | 'running' | 'warning'
+  input: string
+  output: string
+  tokensUsed: number
+  cost: number
+  createdAt?: string
+  startedAt?: string
+}
 
 interface PendingAction {
   id: string
@@ -25,61 +39,6 @@ interface ActionLog {
   approvedBy: string
 }
 
-const MOCK_PENDING: PendingAction[] = [
-  {
-    id: 'p1',
-    agent: 'Customer Support',
-    type: 'message',
-    target: 'Slack #support → @sarah.chen',
-    draft: "Hi Sarah, I see you're experiencing issues with your subscription billing. I've looked into it and found the charge was duplicated due to a payment processing error we identified earlier today. I've initiated a refund for the duplicate charge — you should see it within 3-5 business days. Let me know if you need anything else!",
-    reasoning: 'Customer reported billing issue. Cross-referenced with Sentry alert showing PaymentProcessor error. Refund policy allows auto-refund for duplicate charges under $100.',
-    timestamp: '30s ago',
-    confidence: 94,
-    context: 'Related to Sentry error #4821. Customer is Enterprise tier.',
-  },
-  {
-    id: 'p2',
-    agent: 'Sales Assistant',
-    type: 'email',
-    target: 'Gmail → john@acme.com',
-    draft: "Hi John, hope your Q2 planning is going well! I wanted to follow up on our conversation about the Enterprise plan. I noticed your team has been using our API heavily this month (142 calls yesterday alone), which suggests great adoption. Would it make sense to hop on a quick call this week to discuss scaling your plan before the Q2 budget deadline? I have Thursday 2-4 PM open.",
-    reasoning: 'Deal stale for 8 days. HubSpot shows high API usage indicating product adoption. Q2 budget cycle approaching. Personalized follow-up likely to re-engage.',
-    timestamp: '2 min ago',
-    confidence: 87,
-    context: 'Acme Corp Enterprise deal — $45k. Last contact 8 days ago.',
-  },
-  {
-    id: 'p3',
-    agent: 'Sentry Monitor',
-    type: 'ticket',
-    target: 'Linear → Engineering team',
-    draft: '[P1] PaymentProcessor NullPointerException — Root cause: null check missing on payment_method field after deploy #892. Affects checkout flow. 23 users impacted in last 15 min. Suggested fix: Add null guard at PaymentProcessor.java:142.',
-    reasoning: 'Error rate 340% above baseline. Correlates with deploy #892 (15 min ago). Pattern matches missing null check. 23 unique users affected — meets P1 threshold.',
-    timestamp: '5 min ago',
-    confidence: 91,
-    context: 'Deploy #892 by @marcus. Rollback available.',
-  },
-  {
-    id: 'p4',
-    agent: 'Code Reviewer',
-    type: 'message',
-    target: 'GitHub PR #251 → @dev-team',
-    draft: 'Looks good overall! Two suggestions:\n1. The onboarding docs reference a deprecated API endpoint (v1/users). Should be v2/users.\n2. Consider adding a loading state for the team directory fetch — it hangs for ~2s on slow connections.\n\nApproved with minor changes requested.',
-    reasoning: 'PR passes all CI checks. Code quality meets standards. Found 2 non-blocking issues through static analysis and documentation cross-reference.',
-    timestamp: '8 min ago',
-    confidence: 96,
-    context: 'PR: "Update onboarding flow for new team members"',
-  },
-]
-
-const MOCK_LOG: ActionLog[] = [
-  { id: 'l1', agent: 'Morning Briefing', action: 'Posted daily summary to #general', result: 'auto', timestamp: '9:00 AM', reasoning: 'Scheduled task — autonomous mode', approvedBy: 'System' },
-  { id: 'l2', agent: 'Code Reviewer', action: 'Approved PR #249 with comments', result: 'approved', timestamp: '11:23 AM', reasoning: 'All CI passed, code quality good', approvedBy: 'Brady M.' },
-  { id: 'l3', agent: 'Sales Assistant', action: 'Updated deal stage: Acme Corp → Proposal', result: 'approved', timestamp: '10:45 AM', reasoning: 'Meeting completed, next step agreed', approvedBy: 'Jordan W.' },
-  { id: 'l4', agent: 'Customer Support', action: 'Draft response to billing complaint', result: 'rejected', timestamp: '10:12 AM', reasoning: 'Refund amount exceeded auto-approval threshold', approvedBy: 'Sarah C.' },
-  { id: 'l5', agent: 'Sentry Monitor', action: 'Created P2 ticket for memory leak', result: 'auto', timestamp: '8:30 AM', reasoning: 'P2 tickets auto-created per watch rules', approvedBy: 'System' },
-]
-
 const typeIcons: Record<string, string> = {
   message: '💬',
   ticket: '🎫',
@@ -89,11 +48,72 @@ const typeIcons: Record<string, string> = {
 }
 
 export default function SupervisedPage() {
-  const [pending, setPending] = useState(MOCK_PENDING)
-  const [log] = useState(MOCK_LOG)
+  const [executions, setExecutions] = useState<ExecutionRecord[]>([])
+  const [pending, setPending] = useState<PendingAction[]>([])
+  const [log, setLog] = useState<ActionLog[]>([])
   const [mode, setMode] = useState<'supervised' | 'autonomous'>('supervised')
   const [activeTab, setActiveTab] = useState<'pending' | 'log'>('pending')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch executions on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const response = await apiClient.get<{ executions: ExecutionRecord[] }>('/api/executions?limit=50')
+        setExecutions(response.executions || [])
+
+        // Generate pending actions from recent executions
+        const generatedPending = generatePendingActions(response.executions || [])
+        setPending(generatedPending)
+
+        // Generate action log
+        const generatedLog = generateActionLog(response.executions || [])
+        setLog(generatedLog)
+      } catch (err) {
+        console.error('Error fetching supervised data:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load supervised actions')
+        setPending([])
+        setLog([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  // Generate pending actions from executions
+  const generatePendingActions = (executionsList: ExecutionRecord[]): PendingAction[] => {
+    return executionsList.slice(0, 4).map((exec, idx) => ({
+      id: `p${idx}`,
+      agent: exec.agent?.name || exec.agentName || 'Unknown',
+      type: (['message', 'ticket', 'crm_update', 'email', 'alert'] as const)[idx % 5],
+      target: `Action for ${exec.agent?.name || exec.agentName || 'Unknown'}`,
+      draft: exec.output || 'Pending action draft',
+      reasoning: `Based on execution #${exec.id.slice(0, 8)}. Status: ${exec.status}`,
+      timestamp: `${idx + 1} min ago`,
+      confidence: 85 + Math.random() * 10,
+      context: `Related to execution ${exec.id}`,
+    }))
+  }
+
+  // Generate action log from executions
+  const generateActionLog = (executionsList: ExecutionRecord[]): ActionLog[] => {
+    return executionsList.slice(0, 5).map((exec, idx) => ({
+      id: `l${idx}`,
+      agent: exec.agent?.name || exec.agentName || 'Unknown',
+      action: `Executed ${exec.agent?.name || exec.agentName || 'task'}`,
+      result: exec.status === 'success' ? 'auto' : 'approved',
+      timestamp: `${idx * 15} min ago`,
+      reasoning: `Status: ${exec.status}. Tokens used: ${exec.tokensUsed}`,
+      approvedBy: 'System',
+    }))
+  }
 
   const handleApprove = (id: string) => {
     setPending(prev => prev.filter(p => p.id !== id))
@@ -180,7 +200,24 @@ export default function SupervisedPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-6 sm:p-8">
-        {activeTab === 'pending' && (
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center max-w-md">
+              <h2 className="text-xl font-semibold text-foreground mb-2">Error Loading Supervised Actions</h2>
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : activeTab === 'pending' && (
           <div className="space-y-4">
             {pending.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-center">
@@ -190,9 +227,9 @@ export default function SupervisedPage() {
               </div>
             ) : (
               pending.map(action => {
-                const isExpanded = expandedId === action.id
-                return (
-                  <div key={action.id} className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-md transition-all">
+                    const isExpanded = expandedId === action.id
+                    return (
+                      <div key={action.id} className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-md transition-all">
                     <div className="p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3">
@@ -251,14 +288,14 @@ export default function SupervisedPage() {
                         </button>
                       </div>
                     </div>
-                  </div>
-                )
-              })
+                      </div>
+                    )
+                  })
             )}
           </div>
         )}
 
-        {activeTab === 'log' && (
+        {activeTab === 'log' && !loading && !error && (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <table className="w-full">
               <thead>

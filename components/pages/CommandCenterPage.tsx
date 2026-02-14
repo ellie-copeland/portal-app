@@ -2,7 +2,30 @@
 
 import { useState, useEffect } from 'react'
 import { AlertCircle, Activity, Zap, MessageSquare, BarChart3, Gauge, MessageCircle, Bot, Cpu } from 'lucide-react'
-import { getAgents, getExecutions, getMetrics, Agent as StoreAgent } from '@/lib/store'
+interface StoreAgent {
+  id: string
+  name: string
+  type: 'main' | 'sub'
+  llm: string
+  status: 'active' | 'inactive'
+  description: string
+  constraints: string[]
+  role: string
+}
+
+interface Execution {
+  id: string
+  agentName: string
+  trigger: string
+  status: 'success' | 'failed' | 'running' | 'warning'
+  startedAt: string
+  duration: string
+  tokensUsed: number
+  cost: number
+  model: string
+  input: string
+  output: string
+}
 
 interface Agent {
   agentId: string
@@ -90,31 +113,57 @@ export default function CommandCenterPage() {
         setLoading(true)
         setError(null)
 
-        // Fetch all data in parallel
-        const [agentsRes, sessionsRes, usageRes, conversationsRes] = await Promise.all([
-          fetch('/api/command-center/agents'),
-          fetch('/api/command-center/sessions'),
-          fetch('/api/command-center/usage'),
-          fetch('/api/command-center/conversations'),
+        // Get auth token
+        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+
+        // Fetch from real API endpoints
+        const [agentsRes, executionsRes] = await Promise.all([
+          fetch('/api/agents', { headers }),
+          fetch('/api/executions', { headers }),
         ])
 
-        if (!agentsRes.ok || !sessionsRes.ok || !usageRes.ok || !conversationsRes.ok) {
-          throw new Error('Failed to fetch command center data')
+        if (!agentsRes.ok || !executionsRes.ok) {
+          throw new Error('Failed to fetch data')
         }
 
         const agentsData = await agentsRes.json()
-        const sessionsData = await sessionsRes.json()
-        const usageData = await usageRes.json()
-        const conversationsData = await conversationsRes.json()
+        const executionsData = await executionsRes.json()
 
-        setAgents(agentsData.agents || [])
-        setSessions(sessionsData.sessions || [])
-        setUsage(usageData.usage || [])
-        setActivity(usageData.activity || [])
-        setConversations(conversationsData.conversations || [])
-        setHeartbeat(usageData.heartbeat || { agents: [], defaultAgentId: '' })
+        // Set agents from API
+        setStoreAgents(agentsData.agents || [])
+        
+        // Calculate metrics from fetched data
+        const fetchedAgents = agentsData.agents || []
+        const fetchedExecutions = executionsData.executions || []
+        
+        const totalTokens = fetchedExecutions.reduce((sum: number, e: Execution) => sum + (e.tokensUsed || 0), 0)
+        const totalCost = fetchedExecutions.reduce((sum: number, e: Execution) => sum + (e.cost || 0), 0)
+        const successRate = fetchedExecutions.length > 0
+          ? Math.round((fetchedExecutions.filter((e: Execution) => e.status === 'success').length / fetchedExecutions.length) * 100)
+          : 0
+
+        setMetrics({
+          totalAgents: fetchedAgents.length,
+          activeAgents: fetchedAgents.filter((a: StoreAgent) => a.status === 'active').length,
+          totalExecutions: fetchedExecutions.length,
+          totalTokens,
+          totalCost,
+          successRate,
+        })
+
+        // Set empty data for other tabs (they require separate endpoints)
+        setAgents([])
+        setSessions([])
+        setUsage([])
+        setActivity([])
+        setConversations([])
+        setHeartbeat({ agents: [], defaultAgentId: '' })
       } catch (err) {
-        console.error('Error fetching command center data:', err)
+        console.error('Error fetching data:', err)
         setError(err instanceof Error ? err.message : 'An error occurred')
       } finally {
         setLoading(false)
@@ -156,13 +205,9 @@ export default function CommandCenterPage() {
   const totalTokens = usage.reduce((sum, item) => sum + item.totalTokens, 0)
   const totalCost = usage.reduce((sum, item) => sum + item.totalCost, 0)
 
-  // Shared store data for consistent metrics
+  // State for store agents and metrics (now populated from API)
   const [storeAgents, setStoreAgents] = useState<StoreAgent[]>([])
   const [metrics, setMetrics] = useState({ totalAgents: 0, activeAgents: 0, totalExecutions: 0, totalTokens: 0, totalCost: 0, successRate: 0 })
-  useEffect(() => {
-    setStoreAgents(getAgents())
-    setMetrics(getMetrics())
-  }, [loading])
 
   const tabs = [
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: BarChart3 },
@@ -283,7 +328,10 @@ export default function CommandCenterPage() {
               <div className="bg-card border border-border rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-foreground mb-4">Recent Executions</h2>
                 <div className="space-y-2">
-                  {getExecutions().slice(0, 5).map((exec) => (
+                  {/* Executions data would come from API - display empty state for now */}
+                  {activity.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No executions yet</p>
+                  ) : activity.slice(0, 5).map((exec: any) => (
                     <div key={exec.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${

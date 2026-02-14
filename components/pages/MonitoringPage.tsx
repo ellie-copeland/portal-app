@@ -1,7 +1,24 @@
 'use client'
 
-import { useState } from 'react'
-import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Eye, GitBranch, Link, MessageSquare, Search, Shield, Zap } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Eye, GitBranch, Link, MessageSquare, Search, Shield, Zap, Loader2 } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
+
+interface Agent {
+  id: string
+  name: string
+  status: 'active' | 'inactive'
+  _count?: { executions: number }
+}
+
+interface ExecutionRecord {
+  id: string
+  agentName?: string
+  agent?: { name: string }
+  status: 'success' | 'failed' | 'running' | 'warning'
+  createdAt?: string
+  startedAt?: string
+}
 
 interface Alert {
   id: string
@@ -25,77 +42,6 @@ interface WatchRule {
   enabled: boolean
 }
 
-const MOCK_ALERTS: Alert[] = [
-  {
-    id: 'a1',
-    severity: 'critical',
-    title: 'NullPointerException spike in PaymentProcessor',
-    description: 'Error rate jumped 340% in the last 15 minutes. 23 users affected.',
-    source: 'Sentry',
-    correlatedWith: ['Deploy #892 (15 min ago)', 'Slack: 3 customer complaints in #support'],
-    timestamp: '2 min ago',
-    status: 'new',
-    agent: 'Sentry Monitor',
-    suggestedAction: 'Roll back deploy #892 and notify on-call engineer',
-  },
-  {
-    id: 'a2',
-    severity: 'warning',
-    title: 'Deal "Acme Corp Enterprise" stale for 8 days',
-    description: 'No activity on $45k deal since last meeting. Follow-up overdue.',
-    source: 'HubSpot',
-    correlatedWith: ['Gmail: Last email from john@acme.com 8 days ago', 'Calendar: No meetings scheduled'],
-    timestamp: '1 hour ago',
-    status: 'acknowledged',
-    agent: 'Sales Assistant',
-    suggestedAction: 'Draft follow-up email referencing their Q2 budget timeline',
-  },
-  {
-    id: 'a3',
-    severity: 'info',
-    title: 'PR #251 approved — ready to merge',
-    description: 'Code review complete with 2 minor suggestions addressed.',
-    source: 'GitHub',
-    correlatedWith: ['Linear: Ticket #1247 will be auto-closed on merge'],
-    timestamp: '15 min ago',
-    status: 'resolved',
-    agent: 'Code Reviewer',
-    suggestedAction: 'Merge PR and close Linear ticket',
-  },
-  {
-    id: 'a4',
-    severity: 'warning',
-    title: 'Customer sentiment drop detected',
-    description: '3 negative messages in #support in the last hour. Avg response time: 12 min (target: 5 min).',
-    source: 'Slack',
-    correlatedWith: ['Sentry: Related to payment processing errors', 'HubSpot: 2 affected are Enterprise tier'],
-    timestamp: '25 min ago',
-    status: 'new',
-    agent: 'Customer Support',
-    suggestedAction: 'Prioritize Enterprise customer responses and link to known Sentry issue',
-  },
-  {
-    id: 'a5',
-    severity: 'critical',
-    title: 'API rate limit approaching on HubSpot',
-    description: '87% of daily API quota consumed. Will hit limit in ~2 hours at current rate.',
-    source: 'HubSpot',
-    correlatedWith: ['Executions: Sales Assistant made 142 API calls today'],
-    timestamp: '5 min ago',
-    status: 'acknowledged',
-    agent: 'Sales Assistant',
-    suggestedAction: 'Throttle CRM sync frequency from 1 min to 5 min intervals',
-  },
-]
-
-const MOCK_WATCH_RULES: WatchRule[] = [
-  { id: 'w1', name: 'Sentry error spike', source: 'Sentry', condition: 'Error rate > 200% baseline', escalation: 'notify', enabled: true },
-  { id: 'w2', name: 'Stale CRM deals', source: 'HubSpot', condition: 'No activity > 7 days on deals > $10k', escalation: 'supervised', enabled: true },
-  { id: 'w3', name: 'Failed deploys', source: 'GitHub', condition: 'CI/CD pipeline failure on main branch', escalation: 'notify', enabled: true },
-  { id: 'w4', name: 'Customer complaints', source: 'Slack', condition: 'Negative sentiment in #support > 3 per hour', escalation: 'auto', enabled: true },
-  { id: 'w5', name: 'API quota warning', source: 'Any', condition: 'API usage > 80% of daily limit', escalation: 'notify', enabled: false },
-]
-
 const severityConfig = {
   critical: { color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', icon: AlertTriangle },
   warning: { color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: Bell },
@@ -103,10 +49,110 @@ const severityConfig = {
 }
 
 export default function MonitoringPage() {
-  const [alerts] = useState(MOCK_ALERTS)
-  const [rules] = useState(MOCK_WATCH_RULES)
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [executions, setExecutions] = useState<ExecutionRecord[]>([])
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [rules] = useState<WatchRule[]>([
+    { id: 'w1', name: 'Sentry error spike', source: 'Sentry', condition: 'Error rate > 200% baseline', escalation: 'notify', enabled: true },
+    { id: 'w2', name: 'Failed agent executions', source: 'Executions', condition: 'Failure rate > 10%', escalation: 'supervised', enabled: true },
+    { id: 'w3', name: 'High latency detection', source: 'Performance', condition: 'Execution duration > 30s', escalation: 'notify', enabled: true },
+    { id: 'w4', name: 'Agent status change', source: 'Agents', condition: 'Agent status change', escalation: 'auto', enabled: true },
+    { id: 'w5', name: 'Execution volume spike', source: 'Metrics', condition: 'Executions > 2x baseline', escalation: 'notify', enabled: false },
+  ])
   const [activeTab, setActiveTab] = useState<'feed' | 'rules'>('feed')
   const [filterSeverity, setFilterSeverity] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch agents and executions on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const [agentsRes, executionsRes] = await Promise.all([
+          apiClient.get<{ agents: Agent[] }>('/api/agents'),
+          apiClient.get<{ executions: ExecutionRecord[] }>('/api/executions?limit=50'),
+        ])
+
+        setAgents(agentsRes.agents || [])
+        setExecutions(executionsRes.executions || [])
+
+        // Generate alerts based on execution data
+        const generatedAlerts = generateAlerts(agentsRes.agents || [], executionsRes.executions || [])
+        setAlerts(generatedAlerts)
+      } catch (err) {
+        console.error('Error fetching monitoring data:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load monitoring data')
+        setAlerts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  // Generate alerts from execution data
+  const generateAlerts = (agentsList: Agent[], executionsList: ExecutionRecord[]): Alert[] => {
+    const generatedAlerts: Alert[] = []
+
+    if (executionsList.length === 0) return generatedAlerts
+
+    // Check for failed executions (severity: critical)
+    const failedCount = executionsList.filter(e => e.status === 'failed').length
+    if (failedCount > 0) {
+      generatedAlerts.push({
+        id: 'a-failed',
+        severity: 'critical',
+        title: `${failedCount} Failed Executions`,
+        description: `${failedCount} executions failed in the last period.`,
+        source: 'Executions',
+        correlatedWith: ['Check execution logs for details'],
+        timestamp: 'Just now',
+        status: 'new',
+        agent: 'System',
+        suggestedAction: 'Review failed execution logs and retry',
+      })
+    }
+
+    // Check for agent status
+    agentsList.forEach(agent => {
+      if (agent.status === 'inactive') {
+        generatedAlerts.push({
+          id: `a-${agent.id}`,
+          severity: 'warning',
+          title: `Agent "${agent.name}" is inactive`,
+          description: `The agent is currently disabled.`,
+          source: 'Agent Status',
+          correlatedWith: [`Executions: ${agent._count?.executions || 0} total`],
+          timestamp: '30 min ago',
+          status: 'acknowledged',
+          agent: agent.name,
+          suggestedAction: 'Enable agent or investigate why it was disabled',
+        })
+      }
+    })
+
+    // Add a sample info alert
+    if (executionsList.length > 0) {
+      generatedAlerts.push({
+        id: 'a-success',
+        severity: 'info',
+        title: `${executionsList.filter(e => e.status === 'success').length} Successful Executions`,
+        description: 'Executions completed successfully in the last period.',
+        source: 'Executions',
+        correlatedWith: ['All systems operational'],
+        timestamp: '5 min ago',
+        status: 'resolved',
+        agent: 'System',
+        suggestedAction: 'Continue normal operations',
+      })
+    }
+
+    return generatedAlerts.slice(0, 5) // Limit to 5 alerts
+  }
 
   const filtered = filterSeverity === 'all' ? alerts : alerts.filter(a => a.severity === filterSeverity)
   const criticalCount = alerts.filter(a => a.severity === 'critical' && a.status === 'new').length
@@ -171,7 +217,24 @@ export default function MonitoringPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-6 sm:p-8">
-        {activeTab === 'feed' && (
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center max-w-md">
+              <h2 className="text-xl font-semibold text-foreground mb-2">Error Loading Monitoring Data</h2>
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : activeTab === 'feed' && (
           <>
             {/* Severity filter */}
             <div className="flex gap-2 mb-5">
@@ -190,11 +253,19 @@ export default function MonitoringPage() {
 
             {/* Alert cards */}
             <div className="space-y-4">
-              {filtered.map(alert => {
-                const config = severityConfig[alert.severity]
-                const SeverityIcon = config.icon
-                return (
-                  <div key={alert.id} className={`bg-card border ${config.border} rounded-xl p-5 hover:shadow-md transition-all`}>
+              {filtered.length === 0 ? (
+                <div className="flex items-center justify-center h-48 text-center">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">No alerts</h3>
+                    <p className="text-muted-foreground">Everything looks good</p>
+                  </div>
+                </div>
+              ) : (
+                filtered.map(alert => {
+                  const config = severityConfig[alert.severity]
+                  const SeverityIcon = config.icon
+                  return (
+                    <div key={alert.id} className={`bg-card border ${config.border} rounded-xl p-5 hover:shadow-md transition-all`}>
                     <div className="flex items-start gap-4">
                       <div className={`w-10 h-10 rounded-xl ${config.bg} flex items-center justify-center flex-shrink-0`}>
                         <SeverityIcon className={`w-5 h-5 ${config.color}`} />
@@ -249,13 +320,14 @@ export default function MonitoringPage() {
                       </div>
                     </div>
                   </div>
-                )
-              })}
+                    )
+                  })
+              )}
             </div>
           </>
         )}
 
-        {activeTab === 'rules' && (
+        {activeTab === 'rules' && !loading && !error && (
           <div className="space-y-3">
             {rules.map(rule => (
               <div key={rule.id} className="bg-card border border-border rounded-xl p-5 flex items-center justify-between hover:shadow-md transition-all">

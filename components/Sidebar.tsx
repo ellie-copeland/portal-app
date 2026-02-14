@@ -20,12 +20,20 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null)
   const [showTeamDropdown, setShowTeamDropdown] = useState(false)
   const [loadingTeams, setLoadingTeams] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const getHeaders = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+    return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  }
 
   // Load teams on mount
   useEffect(() => {
     const loadTeams = async () => {
       try {
-        const response = await fetch('/api/teams')
+        const response = await fetch('/api/teams', { headers: getHeaders() })
         if (response.ok) {
           const data = await response.json()
           setTeams(data)
@@ -58,14 +66,14 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
   }
 
   const handleCreateTeam = async () => {
-    const teamName = prompt('Enter team name:')
-    if (!teamName) return
+    if (!newTeamName.trim()) return
+    setCreating(true)
 
     try {
       const response = await fetch('/api/teams', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: teamName }),
+        headers: getHeaders(),
+        body: JSON.stringify({ name: newTeamName.trim() }),
       })
 
       if (response.ok) {
@@ -75,10 +83,13 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
         setCurrentTeam(newTeamData)
         localStorage.setItem('activeTeamId', newTeamData.id)
         setShowTeamDropdown(false)
+        setShowCreateModal(false)
+        setNewTeamName('')
       }
     } catch (error) {
       console.error('Failed to create team:', error)
-      alert('Failed to create team')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -174,7 +185,7 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
 
               {/* Create Team Button */}
               <button
-                onClick={handleCreateTeam}
+                onClick={() => { setShowCreateModal(true); setShowTeamDropdown(false) }}
                 className="w-full px-3 py-2.5 text-left text-sm text-primary hover:bg-primary/5 border-t border-border flex items-center gap-2 font-medium transition-colors"
               >
                 <Plus className="w-4 h-4" />
@@ -255,6 +266,45 @@ export default function Sidebar({ currentPage, setCurrentPage }: SidebarProps) {
       <aside className="hidden md:flex w-60 border-r border-border bg-card shadow-sm h-screen flex-col flex-shrink-0">
         {navContent}
       </aside>
+
+      {/* Create Team Modal */}
+      {showCreateModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowCreateModal(false)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70] w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl p-6">
+            <h2 className="text-lg font-bold text-foreground mb-1">Create New Team</h2>
+            <p className="text-sm text-muted-foreground mb-4">Teams let you organize agents and collaborate with others.</p>
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateTeam() }}>
+              <label className="text-sm font-medium text-foreground block mb-1.5">Team Name</label>
+              <input
+                type="text"
+                value={newTeamName}
+                onChange={e => setNewTeamName(e.target.value)}
+                placeholder="e.g. Marketing, Engineering, Sales"
+                autoFocus
+                required
+                className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 mb-4"
+              />
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateModal(false); setNewTeamName('') }}
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-xl hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating || !newTeamName.trim()}
+                  className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {creating ? 'Creating...' : 'Create Team'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
     </>
   )
 }

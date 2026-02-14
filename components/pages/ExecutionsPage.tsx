@@ -2,7 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import { Zap, Clock, CheckCircle2, XCircle, AlertTriangle, Search, Filter, ChevronDown } from 'lucide-react'
-import { Execution, getExecutions } from '@/lib/store'
+
+interface Execution {
+  id: string
+  agentName: string
+  trigger: string
+  status: 'success' | 'failed' | 'running' | 'warning'
+  startedAt: string
+  duration: string
+  tokensUsed: number
+  cost: number
+  model: string
+  input: string
+  output: string
+}
 
 const PLACEHOLDER_EXECUTIONS: Execution[] = [
   {
@@ -107,13 +120,36 @@ const statusConfig = {
 
 export default function ExecutionsPage() {
   const [executions, setExecutions] = useState<Execution[]>([])
-
-  useEffect(() => {
-    setExecutions(getExecutions())
-  }, [])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    fetchExecutions()
+  }, [])
+
+  const fetchExecutions = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      }
+      const res = await fetch('/api/executions', { headers })
+      if (!res.ok) throw new Error('Failed to fetch executions')
+      const data = await res.json()
+      setExecutions(data.executions || [])
+    } catch (err) {
+      console.error('Error fetching executions:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load executions')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filtered = executions.filter(e => {
     if (filterStatus !== 'all' && e.status !== filterStatus) return false
@@ -187,8 +223,29 @@ export default function ExecutionsPage() {
         </div>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <div className="mx-8 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+        </div>
+      )}
+
       {/* Execution List */}
       <div className="flex-1 overflow-auto p-8">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading executions...</p>
+          </div>
+        ) : executions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <div className="w-16 h-16 bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center mb-4">
+              <Zap className="w-8 h-8 text-purple-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">No executions yet</h3>
+            <p className="text-muted-foreground mb-4 max-w-md">Executions will appear here once your agents start running.</p>
+          </div>
+        ) : (
         <div className="space-y-3">
           {filtered.map(exec => {
             const config = statusConfig[exec.status]
@@ -250,6 +307,7 @@ export default function ExecutionsPage() {
             )
           })}
         </div>
+        )}
       </div>
     </div>
   )
