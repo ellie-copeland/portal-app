@@ -6,17 +6,20 @@ import { X } from 'lucide-react'
 interface Agent {
   id: string
   name: string
-  type: 'main' | 'sub'
-  llm: string
-  status: 'active' | 'inactive'
-  description: string
-  constraints: string[]
-  role: string
+  type: 'MAIN' | 'SUB' | 'main' | 'sub'
+  model?: string
+  llm?: string
+  status?: 'active' | 'inactive' | 'ACTIVE' | 'INACTIVE'
+  description?: string
+  constraints?: string[]
+  role?: string
+  persona?: string
+  avatarUrl?: string
 }
 
 interface AgentFormProps {
   agent?: Agent | null
-  onSubmit: (data: Omit<Agent, 'id'>) => void
+  onSubmit: (data: Record<string, any>) => void
   onCancel: () => void
 }
 
@@ -26,28 +29,35 @@ const ROLE_OPTIONS = ['Support Manager', 'FAQ Handler', 'Sales Support', 'Techni
 export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps) {
   const [formData, setFormData] = useState({
     name: '',
-    type: 'main' as 'main' | 'sub',
-    llm: 'GPT-4',
-    status: 'active' as 'active' | 'inactive',
+    type: 'MAIN' as 'MAIN' | 'SUB',
+    model: 'gpt-4',
     description: '',
     constraints: [] as string[],
     role: 'Support Manager',
+    persona: '',
+    avatarUrl: '',
   })
   const [newConstraint, setNewConstraint] = useState('')
 
   useEffect(() => {
     if (agent) {
-      setFormData(agent)
+      // Normalize agent data: convert llm->model, uppercase type
+      setFormData({
+        name: agent.name || '',
+        type: (agent.type === 'main' ? 'MAIN' : agent.type === 'sub' ? 'SUB' : agent.type) as 'MAIN' | 'SUB',
+        model: agent.model || agent.llm || 'gpt-4',
+        description: agent.description || '',
+        constraints: agent.constraints || [],
+        role: agent.role || 'Support Manager',
+        persona: (agent as any).persona || '',
+        avatarUrl: (agent as any).avatarUrl || '',
+      })
     }
   }, [agent])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    if (name === 'type' || name === 'status') {
-      setFormData(prev => ({ ...prev, [name]: value as any }))
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }))
-    }
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const handleAddConstraint = () => {
@@ -70,7 +80,17 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (formData.name.trim()) {
-      onSubmit(formData)
+      // Map form data to API schema
+      onSubmit({
+        name: formData.name,
+        type: formData.type, // Already uppercase (MAIN/SUB)
+        model: formData.model,
+        description: formData.description,
+        constraints: formData.constraints,
+        role: formData.role,
+        ...(formData.persona && { persona: formData.persona }),
+        ...(formData.avatarUrl && { avatarUrl: formData.avatarUrl }),
+      })
     }
   }
 
@@ -114,32 +134,16 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
               onChange={handleChange}
               className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
             >
-              <option value="main">Main Agent</option>
-              <option value="sub">Sub-Agent</option>
+              <option value="MAIN">Main Agent</option>
+              <option value="SUB">Sub-Agent</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Status</label>
+            <label className="block text-sm font-medium text-foreground mb-2">Model *</label>
             <select
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-        </div>
-
-        {/* LLM & Role */}
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">LLM Model *</label>
-            <select
-              name="llm"
-              value={formData.llm}
+              name="model"
+              value={formData.model}
               onChange={handleChange}
               className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
             >
@@ -148,20 +152,47 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
               ))}
             </select>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Role *</label>
-            <select
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
-            >
-              {ROLE_OPTIONS.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
+        {/* Role */}
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">Role *</label>
+          <select
+            name="role"
+            value={formData.role}
+            onChange={handleChange}
+            className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+          >
+            {ROLE_OPTIONS.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Persona */}
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">Persona (Optional)</label>
+          <textarea
+            name="persona"
+            value={formData.persona}
+            onChange={handleChange}
+            placeholder="Describe the personality and style of this agent..."
+            rows={2}
+            className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder-muted-foreground resize-none"
+          />
+        </div>
+
+        {/* Avatar URL */}
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-2">Avatar URL (Optional)</label>
+          <input
+            type="url"
+            name="avatarUrl"
+            value={formData.avatarUrl}
+            onChange={handleChange}
+            placeholder="https://example.com/avatar.png"
+            className="w-full px-4 py-2 border border-input bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder-muted-foreground"
+          />
         </div>
 
         {/* Description */}
