@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Key, Eye, EyeOff, Trash2, Plus, ExternalLink } from 'lucide-react'
+import { authHeaders } from '@/lib/fetch-auth'
 
 interface StoredKey {
   id: string
@@ -56,7 +57,9 @@ export default function LLMKeyManager() {
   const fetchKeys = async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/keys')
+      const res = await fetch('/api/keys', {
+        headers: authHeaders(),
+      })
       if (!res.ok) throw new Error('Failed to fetch keys')
       const data = await res.json()
       setKeys(data.keys || [])
@@ -87,7 +90,7 @@ export default function LLMKeyManager() {
     try {
       const res = await fetch('/api/keys', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           provider,
           key: keyValue,
@@ -117,7 +120,10 @@ export default function LLMKeyManager() {
     if (!confirm('Are you sure you want to delete this API key?')) return
 
     try {
-      const res = await fetch(`/api/keys?id=${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/keys?id=${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      })
       if (!res.ok) throw new Error('Failed to delete key')
 
       showToast('API key deleted successfully', 'success')

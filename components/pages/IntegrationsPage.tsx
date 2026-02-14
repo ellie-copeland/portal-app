@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Check, ExternalLink, RefreshCw, Settings, Wifi, WifiOff, Zap } from 'lucide-react'
 import IntegrationWizard from '@/components/IntegrationWizard'
 import { INTEGRATION_CONFIGS } from '@/lib/integration-configs'
+import { authHeaders } from '@/lib/fetch-auth'
 
 interface DBIntegration {
   id: string
@@ -68,7 +69,9 @@ export default function IntegrationsPage() {
   useEffect(() => {
     const loadIntegrations = async () => {
       try {
-        const response = await fetch('/api/integrations')
+        const response = await fetch('/api/integrations', {
+          headers: authHeaders(),
+        })
         if (!response.ok) throw new Error('Failed to fetch')
 
         const dbIntegrations: DBIntegration[] = await response.json()

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, Check, ExternalLink, Loader2, X } from 'lucide-react'
 import { getIntegrationConfig, IntegrationConfig, WizardStep } from '@/lib/integration-configs'
+import { authHeaders } from '@/lib/fetch-auth'
 
 interface IntegrationWizardProps {
   integrationId: string
@@ -93,7 +94,7 @@ export default function IntegrationWizard({
     try {
       const response = await fetch('/api/integrations/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           provider: integrationId,
           credentials: formData,
@@ -119,7 +120,7 @@ export default function IntegrationWizard({
     try {
       const response = await fetch('/api/integrations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           provider: integrationId,
           config: formData,
