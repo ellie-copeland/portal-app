@@ -8,13 +8,30 @@ interface AuthPageProps {
 }
 
 export default function AuthPage({ onAuth }: AuthPageProps) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [forgotSent, setForgotSent] = useState(false)
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (res.ok) setForgotSent(true)
+      else setError('Something went wrong. Try again.')
+    } catch { setError('Network error.') }
+    finally { setLoading(false) }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,12 +78,40 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
           </div>
           <h1 className="text-2xl font-bold text-foreground">Cloud Employee Portal</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {mode === 'signin' ? 'Sign in to your account' : 'Create your account'}
+            {mode === 'signin' ? 'Sign in to your account' : mode === 'signup' ? 'Create your account' : 'Reset your password'}
           </p>
         </div>
 
         {/* Form Card */}
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          {mode === 'forgot' ? (
+            forgotSent ? (
+              <div className="text-center py-4">
+                <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-2xl">📧</span>
+                </div>
+                <h3 className="font-semibold text-foreground mb-1">Check your email</h3>
+                <p className="text-sm text-muted-foreground mb-4">If an account exists for {email}, we&apos;ve sent a reset link.</p>
+                <button onClick={() => { setMode('signin'); setForgotSent(false) }} className="text-sm text-primary hover:underline">Back to sign in</button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgot} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground block mb-1.5">Email</label>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required
+                    className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</div>}
+                <button type="submit" disabled={loading}
+                  className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : 'Send Reset Link'}
+                </button>
+                <div className="text-center">
+                  <button type="button" onClick={() => { setMode('signin'); setError('') }} className="text-sm text-primary hover:underline">Back to sign in</button>
+                </div>
+              </form>
+            )
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <div>
@@ -133,8 +178,15 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
               )}
             </button>
           </form>
+          )}
 
-          <div className="mt-4 text-center">
+          {mode !== 'forgot' && (
+          <div className="mt-4 text-center space-y-2">
+            {mode === 'signin' && (
+              <button onClick={() => { setMode('forgot'); setError('') }} className="block w-full text-sm text-muted-foreground hover:text-foreground">
+                Forgot password?
+              </button>
+            )}
             <button
               onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError('') }}
               className="text-sm text-primary hover:underline"
@@ -142,6 +194,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
               {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>
           </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
