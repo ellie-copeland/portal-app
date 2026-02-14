@@ -311,7 +311,7 @@ export default function TeamPage() {
               {pendingInvitations.map((invite) => {
                 const role = roleConfig[invite.role]
                 const RoleIcon = role.icon
-                const isExpiring = new Date(invite.expiresAt) - new Date() < 24 * 60 * 60 * 1000
+                const isExpiring = new Date(invite.expiresAt).getTime() - new Date().getTime() < 24 * 60 * 60 * 1000
                 
                 return (
                   <div key={invite.id} className="px-5 py-4 flex items-center justify-between">
