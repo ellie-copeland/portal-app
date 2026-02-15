@@ -404,9 +404,10 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+    console.error('Chat error:', errorMsg)
     await prisma.message.create({
-      data: { conversationId: convId!, role: 'ASSISTANT', content: `❌ Error: ${errorMsg}` },
+      data: { conversationId: convId!, role: 'ASSISTANT', content: '❌ Something went wrong. Please try again.' },
     })
-    return NextResponse.json({ error: errorMsg, conversationId: convId }, { status: 500 })
+    return NextResponse.json({ error: 'Chat request failed. Please try again.', conversationId: convId }, { status: 500 })
   }
 }

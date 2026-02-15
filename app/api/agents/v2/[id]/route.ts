@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params: paramsPromise }: { param
 
   if (agent.count === 0) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
-  const updated = await prisma.agent.findUnique({ where: { id: params.id } })
+  const updated = await prisma.agent.findFirst({ where: { id: params.id, teamId: ctx.teamId } })
 
   await prisma.auditLog.create({
     data: { userId: ctx.userId, teamId: ctx.teamId, action: 'agent.update', resource: 'agent', resourceId: params.id },

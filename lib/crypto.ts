@@ -1,7 +1,11 @@
 import crypto from 'crypto'
 
 const ALGORITHM = 'aes-256-gcm'
-const KEY = crypto.scryptSync(process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'dev-encryption-key-change-me', 'salt', 32)
+const encryptionKey = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET
+if (!encryptionKey) {
+  throw new Error('ENCRYPTION_KEY or JWT_SECRET environment variable is required')
+}
+const KEY = crypto.scryptSync(encryptionKey, 'assistable-portal-salt-v1', 32)
 
 export function encrypt(text: string): string {
   const iv = crypto.randomBytes(16)

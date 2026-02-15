@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params: paramsPromise }: { param
 
   if (result.count === 0) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
-  const updated = await prisma.task.findUnique({ where: { id: params.id } })
+  const updated = await prisma.task.findFirst({ where: { id: params.id, teamId: ctx.teamId } })
   return NextResponse.json(updated)
 }
 
