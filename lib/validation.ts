@@ -35,7 +35,7 @@ export const createAgentSchema = z.object({
   name: safeString(100).pipe(z.string().min(1)),
   description: safeString(500).optional(),
   type: z.enum(['MAIN', 'SUB']).default('MAIN'),
-  model: z.string().max(50).default('gpt-4'),
+  model: z.string().max(100),
   systemPrompt: z.string().max(10000).optional(),
   constraints: z.array(z.string().max(200)).max(20).default([]),
   role: safeString(100).optional(),

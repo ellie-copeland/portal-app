@@ -142,7 +142,7 @@ export default function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps)
       setFormData({
         name: agent.name || '',
         type: (agent.type === 'main' ? 'MAIN' : agent.type === 'sub' ? 'SUB' : agent.type) as 'MAIN' | 'SUB',
-        model: agent.model || agent.llm || 'gpt-4',
+        model: agent.model || agent.llm || '',
         description: agent.description || '',
         constraints: agent.constraints || [],
         role: agent.role || 'Support Manager',

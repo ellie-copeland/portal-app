@@ -232,7 +232,10 @@ export async function POST(req: NextRequest) {
   })
 
   // Get API key
-  const model = agent.model || 'gpt-4o-mini'
+  const model = agent.model
+  if (!model) {
+    return NextResponse.json({ error: 'No model configured for this agent. Edit the agent and select a model.' }, { status: 400 })
+  }
   const config = (agent.config as Record<string, unknown>) || {}
   const provider = detectProvider(model)
 

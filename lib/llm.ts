@@ -72,12 +72,10 @@ function cleanModel(model: string): string {
 }
 
 export async function getUserApiKey(userId: string, provider: string): Promise<string | null> {
-  // Try exact provider first, then fallback to openrouter
+  // Only use the exact provider key — no fallback
   const key = await prisma.userApiKey.findFirst({
     where: { userId, provider },
-  }) || (provider !== 'openrouter' ? await prisma.userApiKey.findFirst({
-    where: { userId, provider: 'openrouter' },
-  }) : null)
+  })
 
   if (!key) return null
 
