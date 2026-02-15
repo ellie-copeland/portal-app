@@ -7,24 +7,16 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { streamText, tool, stepCountIs, zodSchema } from 'ai'
+import { streamText, tool, stepCountIs, zodSchema, UIMessage, convertToModelMessages } from 'ai'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const chatSchema = z.object({
-  content: z.string().min(1).max(10000),
-  agentId: z.string(),
-  conversationId: z.string().nullable().optional(),
-})
-
 // Clean Slack-formatted URLs: <http://example.com|example.com> → http://example.com
 function cleanUrl(url: string): string {
-  // Handle Slack mrkdwn format
   const slackMatch = url.match(/<(https?:\/\/[^|>]+)/)
   if (slackMatch) return slackMatch[1]
-  // Add protocol if missing
   if (!url.startsWith('http')) return `https://${url}`
   return url
 }
@@ -47,12 +39,9 @@ async function scrapeWebpageExecute({ url: rawUrl }: { url: string }): Promise<{
     }
 
     const html = await response.text()
-    
-    // Extract title
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is)
     const title = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : ''
 
-    // Extract meta tags (critical for SPAs that render client-side)
     const metaParts: string[] = []
     const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
     if (descMatch) metaParts.push(`Description: ${descMatch[1]}`)
@@ -60,7 +49,6 @@ async function scrapeWebpageExecute({ url: rawUrl }: { url: string }): Promise<{
     if (ogTitleMatch) metaParts.push(`Title: ${ogTitleMatch[1]}`)
     const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i)
     if (ogDescMatch) metaParts.push(`About: ${ogDescMatch[1]}`)
-    // Extract any JSON-LD structured data
     const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i)
     if (jsonLdMatch) {
       try {
@@ -71,7 +59,6 @@ async function scrapeWebpageExecute({ url: rawUrl }: { url: string }): Promise<{
       } catch {}
     }
 
-    // Strip HTML to get text content
     const textContent = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -84,7 +71,6 @@ async function scrapeWebpageExecute({ url: rawUrl }: { url: string }): Promise<{
       .replace(/\s+/g, ' ')
       .trim()
 
-    // Combine meta info + body text
     const metaSection = metaParts.length > 0 ? `## Page Metadata\n${metaParts.join('\n')}\n\n## Page Content\n` : ''
     const fullContent = metaSection + textContent
 
@@ -92,9 +78,7 @@ async function scrapeWebpageExecute({ url: rawUrl }: { url: string }): Promise<{
       ? fullContent.slice(0, 8000) + '\n\n[Content truncated...]'
       : fullContent
 
-    // If content is very short (SPA with no server-rendered content), also try fetching subpages
     if (textContent.length < 200 && metaParts.length > 0) {
-      // Try /pricing page
       try {
         const pricingRes = await fetch(`${url.replace(/\/$/, '')}/pricing`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
@@ -122,7 +106,7 @@ async function scrapeWebpageExecute({ url: rawUrl }: { url: string }): Promise<{
   }
 }
 
-// Model name mapping (display name → API model ID)
+// Model name mapping
 const MODEL_ID_MAP: Record<string, string> = {
   'claude-opus-4': 'claude-opus-4-20250514',
   'claude-sonnet-4': 'claude-sonnet-4-20250514',
@@ -147,7 +131,6 @@ function detectProvider(model: string): 'anthropic' | 'openai' | 'google' | 'ope
   return 'openrouter'
 }
 
-// Use direct provider SDKs instead of routing everything through OpenRouter
 function getProviderForModel(model: string, apiKey: string) {
   const provider = detectProvider(model)
   const modelId = cleanModel(model)
@@ -156,18 +139,15 @@ function getProviderForModel(model: string, apiKey: string) {
     const anthropic = createAnthropic({ apiKey })
     return anthropic(modelId)
   }
-
   if (provider === 'openai') {
     const openai = createOpenAI({ apiKey })
     return openai(modelId)
   }
-
   if (provider === 'google') {
     const google = createGoogleGenerativeAI({ apiKey })
     return google(modelId)
   }
 
-  // Fallback: OpenRouter for everything else
   const openrouter = createOpenAICompatible({
     name: 'openrouter',
     baseURL: 'https://openrouter.ai/api/v1',
@@ -185,13 +165,24 @@ export async function POST(req: NextRequest) {
   if (!isAuthContext(ctx)) return ctx
 
   const body = await req.json()
-  const parsed = chatSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 })
+
+  // Extract our custom fields from body
+  const { messages: uiMessages, agentId, conversationId: rawConvId } = body as {
+    messages: UIMessage[]
+    agentId: string
+    conversationId?: string | null
   }
 
-  const { content, agentId, conversationId: rawConvId } = parsed.data
-  const conversationId = rawConvId || undefined
+  if (!agentId || !uiMessages?.length) {
+    return NextResponse.json({ error: 'agentId and messages are required' }, { status: 400 })
+  }
+
+  // Get the latest user message content for DB storage
+  const lastUserMsg = [...uiMessages].reverse().find(m => m.role === 'user')
+  const userContent = lastUserMsg?.parts
+    ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map(p => p.text)
+    .join('\n') || ''
 
   // Verify agent access
   const agent = await prisma.agent.findFirst({
@@ -204,13 +195,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Get or create conversation
-  let convId = conversationId
+  let convId = rawConvId || undefined
   if (!convId) {
     const conv = await prisma.conversation.create({
       data: {
         agentId,
         userId: ctx.userId,
-        title: content.slice(0, 100),
+        title: userContent.slice(0, 100),
       },
     })
     convId = conv.id
@@ -221,9 +212,9 @@ export async function POST(req: NextRequest) {
     if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
   }
 
-  // Save user message
+  // Save user message to DB
   await prisma.message.create({
-    data: { conversationId: convId, role: 'USER', content },
+    data: { conversationId: convId, role: 'USER', content: userContent },
   })
 
   await prisma.conversation.update({
@@ -241,33 +232,13 @@ export async function POST(req: NextRequest) {
 
   const apiKey = await getUserApiKey(ctx.userId, provider)
   if (!apiKey) {
-    await prisma.message.create({
-      data: {
-        conversationId: convId,
-        role: 'ASSISTANT',
-        content: `⚠️ No API key configured for provider "${provider}". Add one via POST /api/keys.`,
-      },
-    })
     return NextResponse.json({
       error: `No API key for "${provider}"`,
       conversationId: convId,
     }, { status: 400 })
   }
 
-  // Load conversation history (filter out error/system messages)
-  const rawHistory = await prisma.message.findMany({
-    where: { conversationId: convId },
-    orderBy: { createdAt: 'asc' },
-    take: 30,
-  })
-  const history = rawHistory.filter(m =>
-    m.content &&
-    m.content.trim().length > 0 &&
-    !m.content.startsWith('❌') &&
-    !m.content.startsWith('⚠️')
-  ).slice(-20)
-
-  // Load brief context from most recent prior conversation
+  // Load prior conversation context
   const priorConversations = await prisma.conversation.findMany({
     where: { agentId, userId: ctx.userId, id: { not: convId } },
     orderBy: { updatedAt: 'desc' },
@@ -296,20 +267,17 @@ export async function POST(req: NextRequest) {
   if (agent.role) systemPrompt = `You are a ${agent.role}.\n\n${systemPrompt}`
   if (priorContext) systemPrompt += priorContext
 
-  // Build messages for AI SDK
-  const messages = history.map(m => ({
-    role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }))
-
   const startTime = Date.now()
   const modelInstance = getProviderForModel(model, apiKey)
+
+  // Convert UIMessages to model messages for the AI SDK
+  const modelMessages = await convertToModelMessages(uiMessages)
 
   try {
     const result = streamText({
       model: modelInstance,
       system: systemPrompt || undefined,
-      messages,
+      messages: modelMessages,
       temperature: (config.temperature as number) ?? 0.7,
       maxOutputTokens: (config.max_tokens as number) ?? 4096,
       tools: {
@@ -327,7 +295,6 @@ export async function POST(req: NextRequest) {
           })),
           execute: async ({ query }: { query: string }) => {
             try {
-              // Use Google's web search (no API key needed)
               const res = await fetch(`https://www.google.com/search?q=${encodeURIComponent(query)}&num=8`, {
                 headers: {
                   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -338,8 +305,6 @@ export async function POST(req: NextRequest) {
               })
               if (!res.ok) return { query, results: [], error: `Search failed: HTTP ${res.status}` }
               const html = await res.text()
-              
-              // Extract text content from Google results page
               const textContent = html
                 .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
                 .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -352,8 +317,6 @@ export async function POST(req: NextRequest) {
                 .replace(/&quot;/g, '"')
                 .replace(/\s+/g, ' ')
                 .trim()
-              
-              // Return raw text for the LLM to interpret
               const truncated = textContent.length > 6000 ? textContent.slice(0, 6000) : textContent
               return { query, content: truncated }
             } catch (err) {
@@ -373,9 +336,8 @@ export async function POST(req: NextRequest) {
           },
         }),
       },
-      stopWhen: stepCountIs(3), // Allow up to 3 tool-calling rounds
+      stopWhen: stepCountIs(3),
       async onFinish({ text, totalUsage }) {
-        // Save assistant message to DB
         const tokensUsed = (totalUsage?.inputTokens || 0) + (totalUsage?.outputTokens || 0)
         await prisma.message.create({
           data: {
@@ -394,7 +356,7 @@ export async function POST(req: NextRequest) {
             userId: ctx.userId,
             trigger: 'Chat',
             status: 'SUCCESS',
-            input: content,
+            input: userContent,
             output: text,
             tokensUsed,
             cost: 0,
@@ -406,32 +368,17 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Stream plain text chunks (not AI SDK protocol format)
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder()
-        try {
-          for await (const chunk of result.textStream) {
-            if (chunk) {
-              controller.enqueue(encoder.encode(chunk))
-            }
-          }
-        } catch (err) {
-          console.error('Stream error:', err)
-          const errMsg = err instanceof Error ? err.message : String(err)
-          controller.enqueue(encoder.encode(`\n\n❌ Stream error: ${errMsg}`))
-        } finally {
-          controller.close()
-        }
-      },
-    })
+    // Use AI SDK's UIMessage stream response for useChat compatibility
+    const response = result.toUIMessageStreamResponse()
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'X-Conversation-Id': convId!,
-        'Cache-Control': 'no-cache',
-      },
+    // Add conversation ID header
+    const newHeaders = new Headers(response.headers)
+    newHeaders.set('X-Conversation-Id', convId!)
+    newHeaders.set('Cache-Control', 'no-cache')
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: newHeaders,
     })
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error'

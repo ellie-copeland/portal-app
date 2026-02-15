@@ -1,9 +1,36 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Paperclip, Phone, Sparkles, AlertCircle, Loader2, Plus } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Bot, Phone, AlertCircle, Loader2, Plus } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { authHeaders } from '@/lib/fetch-auth'
+import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
+import type { UIMessage } from 'ai'
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from '@/components/ai-elements/conversation'
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from '@/components/ai-elements/message'
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from '@/components/ai-elements/reasoning'
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputSubmit,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputTools,
+  type PromptInputMessage,
+} from '@/components/ai-elements/prompt-input'
 
 interface Agent {
   id: string
@@ -12,30 +39,146 @@ interface Agent {
   status?: 'active' | 'inactive'
 }
 
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
-  agent?: string
-}
-
 interface AgentChatPageProps {
   onNavigateToSettings?: (page: any) => void
+}
+
+// Render tool invocations inline
+function ToolCallPart({ toolName, state, args, result }: {
+  toolName: string
+  state: string
+  args: Record<string, unknown>
+  result?: unknown
+}) {
+  const isRunning = state !== 'result'
+  return (
+    <div className="my-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+      <div className="flex items-center gap-2">
+        {isRunning && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+        <span className="font-medium text-foreground">
+          {toolName === 'scrapeWebpage' ? '🌐 Scraping webpage' :
+           toolName === 'searchWeb' ? '🔍 Searching web' :
+           toolName === 'fetchSubpage' ? '📄 Fetching subpage' :
+           `🔧 ${toolName}`}
+        </span>
+        {args && (
+          <span className="text-muted-foreground truncate max-w-[300px]">
+            {toolName === 'searchWeb' ? `"${(args as any).query}"` :
+             toolName === 'scrapeWebpage' ? `${(args as any).url}` :
+             toolName === 'fetchSubpage' ? `${(args as any).baseUrl}${(args as any).path}` :
+             JSON.stringify(args).slice(0, 60)}
+          </span>
+        )}
+      </div>
+      {state === 'result' && <div className="mt-1 text-muted-foreground">✓ Done</div>}
+    </div>
+  )
+}
+
+// Render message parts for assistant messages
+function MessageParts({ message, isLastMessage, isStreaming }: {
+  message: UIMessage
+  isLastMessage: boolean
+  isStreaming: boolean
+}) {
+  // Consolidate reasoning parts
+  const reasoningParts = message.parts.filter((p): p is any => p.type === 'reasoning')
+  const reasoningText = reasoningParts.map((p: any) => p.text).join('\n\n')
+  const hasReasoning = reasoningParts.length > 0
+  const lastPart = message.parts.at(-1)
+  const isReasoningStreaming = isLastMessage && isStreaming && lastPart?.type === 'reasoning'
+
+  return (
+    <>
+      {hasReasoning && (
+        <Reasoning className="w-full" isStreaming={isReasoningStreaming}>
+          <ReasoningTrigger />
+          <ReasoningContent>{reasoningText}</ReasoningContent>
+        </Reasoning>
+      )}
+      {message.parts.map((part, i) => {
+        if (part.type === 'text') {
+          return (
+            <MessageResponse key={`${message.id}-${i}`}>
+              {part.text}
+            </MessageResponse>
+          )
+        }
+        // Tool parts: type starts with 'tool-' (e.g. 'tool-scrapeWebpage')
+        if (part.type.startsWith('tool-') && part.type !== 'tool-invocation') {
+          const toolPart = part as any
+          const toolName = part.type.replace('tool-', '')
+          return (
+            <ToolCallPart
+              key={`${message.id}-${i}`}
+              toolName={toolName}
+              state={toolPart.state}
+              args={toolPart.input ?? toolPart.args ?? {}}
+              result={toolPart.output ?? toolPart.result}
+            />
+          )
+        }
+        // Dynamic tool parts
+        if (part.type === 'dynamic-tool') {
+          const toolPart = part as any
+          return (
+            <ToolCallPart
+              key={`${message.id}-${i}`}
+              toolName={toolPart.toolName}
+              state={toolPart.state}
+              args={toolPart.input ?? {}}
+              result={toolPart.output}
+            />
+          )
+        }
+        return null
+      })}
+    </>
+  )
 }
 
 export default function AgentChatPage({ onNavigateToSettings }: AgentChatPageProps) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
-  const [input, setInput] = useState('')
   const [apiKeyError, setApiKeyError] = useState(false)
   const [checkingKeys, setCheckingKeys] = useState(true)
   const [loading, setLoading] = useState(true)
-  const [sendingMessage, setSendingMessage] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [inputText, setInputText] = useState('')
+
+  // Create transport with custom headers and body
+  const transport = useMemo(() => new DefaultChatTransport({
+    api: '/api/chat',
+    headers: () => authHeaders(),
+    body: () => ({
+      agentId: selectedAgentId,
+      conversationId,
+    }),
+    fetch: async (url, init) => {
+      const response = await fetch(url, init)
+      // Capture conversation ID from response header
+      const newConvId = response.headers.get('X-Conversation-Id')
+      if (newConvId && !conversationId) {
+        setConversationId(newConvId)
+      }
+      return response
+    },
+  }), [selectedAgentId, conversationId])
+
+  const {
+    messages,
+    sendMessage,
+    setMessages,
+    status,
+  } = useChat({
+    transport,
+    onError(error) {
+      console.error('Chat error:', error)
+    },
+  })
+
+  const isStreaming = status === 'streaming'
 
   // Fetch agents on mount
   useEffect(() => {
@@ -45,9 +188,8 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
         const response = await apiClient.get<{ agents: Agent[] }>('/api/agents')
         const agentsList = response.agents || []
         setAgents(agentsList)
-        
+
         if (agentsList.length > 0) {
-          // Restore last selected agent or default to first
           const lastAgentId = typeof window !== 'undefined' ? localStorage.getItem('lastChatAgentId') : null
           const restoredAgent = lastAgentId ? agentsList.find(a => a.id === lastAgentId) : null
           const agent = restoredAgent || agentsList[0]
@@ -65,12 +207,6 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
     checkApiKeys()
   }, [])
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  // Check for API keys on mount
   const checkApiKeys = async () => {
     try {
       const res = await fetch('/api/keys', { headers: authHeaders() })
@@ -88,7 +224,6 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
     }
   }
 
-  // Update selected agent and load conversation history
   const handleSelectAgent = async (agentName: string, agentId: string) => {
     setSelectedAgent(agentName)
     setSelectedAgentId(agentId)
@@ -105,16 +240,14 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
         if (convs.length > 0) {
           const latest = convs[0]
           setConversationId(latest.id)
-          // Load messages for this conversation
           const msgRes = await fetch(`/api/conversations/${latest.id}/messages`, { headers: authHeaders() })
           if (msgRes.ok) {
             const msgData = await msgRes.json()
-            const history = (msgData.messages || []).map((m: any) => ({
+            const history: UIMessage[] = (msgData.messages || []).map((m: any) => ({
               id: m.id,
-              role: (m.role?.toLowerCase() || 'user') as 'user' | 'assistant',
-              content: m.content,
-              timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-              agent: m.role === 'assistant' ? agentName : undefined,
+              role: m.role?.toLowerCase() === 'user' ? 'user' as const : 'assistant' as const,
+              parts: [{ type: 'text' as const, text: m.content }],
+              createdAt: new Date(m.createdAt),
             }))
             setMessages(history)
           }
@@ -125,89 +258,11 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
     }
   }
 
-  const handleSend = async () => {
-    if (!input.trim()) return
-    if (apiKeyError) return
-    if (!selectedAgentId) return
-
-    try {
-      setSendingMessage(true)
-
-      const userMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: input,
-        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-      }
-      setMessages(prev => [...prev, userMsg])
-
-      const messageInput = input
-      setInput('')
-
-      // Send message to API (streaming response)
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({
-          content: messageInput,
-          agentId: selectedAgentId,
-          conversationId: conversationId,
-        }),
-      })
-
-      // Update conversation ID from header
-      const newConvId = res.headers.get('X-Conversation-Id')
-      if (newConvId && !conversationId) {
-        setConversationId(newConvId)
-      }
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: 'Request failed' }))
-        throw new Error(errData.error || `HTTP ${res.status}`)
-      }
-
-      // Read streaming response
-      const reader = res.body?.getReader()
-      const decoder = new TextDecoder()
-      const agentMsgId = Date.now().toString() + '-assistant'
-
-      // Add placeholder assistant message
-      const agentMsg: ChatMessage = {
-        id: agentMsgId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-        agent: selectedAgent || undefined,
-      }
-      setMessages(prev => [...prev, agentMsg])
-
-      if (reader) {
-        let fullText = ''
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const chunk = decoder.decode(value, { stream: true })
-          fullText += chunk
-          setMessages(prev => prev.map(m =>
-            m.id === agentMsgId ? { ...m, content: fullText } : m
-          ))
-        }
-      }
-    } catch (err) {
-      console.error('Error sending message:', err)
-      // Show error message to user
-      const errorMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `❌ Error sending message: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-        agent: selectedAgent || undefined,
-      }
-      setMessages(prev => [...prev, errorMsg])
-    } finally {
-      setSendingMessage(false)
-    }
-  }
+  const handleSubmit = useCallback((message: PromptInputMessage) => {
+    if (!message.text?.trim() || apiKeyError || !selectedAgentId) return
+    sendMessage({ text: message.text })
+    setInputText('')
+  }, [apiKeyError, selectedAgentId, sendMessage])
 
   return (
     <div className="flex h-full">
@@ -241,7 +296,7 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
                       <Bot className={`w-4 h-4 ${isActive ? 'text-purple-600' : 'text-muted-foreground'}`} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-medium truncate ${isActive ? 'text-foreground' : 'text-foreground'}`}>{name}</p>
+                      <p className="text-sm font-medium truncate text-foreground">{name}</p>
                       <p className="text-xs text-muted-foreground truncate">{agent.model || 'No model'}</p>
                     </div>
                   </div>
@@ -297,86 +352,95 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
+        {/* Messages area */}
+        <div className="flex-1 flex flex-col min-h-0">
           {loading && (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
           )}
           {!loading && !checkingKeys && apiKeyError && (
-            <div className="self-center max-w-sm text-center">
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4 mb-4">
-                <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
-                <h3 className="font-semibold text-amber-900 dark:text-amber-300 mb-1">No API Key Configured</h3>
-                <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                  Add an API key to start chatting with your agents
-                </p>
-                <button
-                  onClick={() => onNavigateToSettings?.('settings')}
-                  className="text-sm px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  Go to Settings
-                </button>
-              </div>
-            </div>
-          )}
-          {!loading && messages.length === 0 && selectedAgent && !apiKeyError && (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <Bot className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-semibold text-foreground mb-2">Chat with {selectedAgent}</p>
-              <p className="text-muted-foreground">Start a conversation to see messages here</p>
-            </div>
-          )}
-          {messages.map(msg => (
-            <div key={msg.id} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                msg.role === 'user' ? 'bg-teal-100 dark:bg-teal-900/40' : 'bg-purple-100 dark:bg-purple-900/40'
-              }`}>
-                {msg.role === 'user'
-                  ? <User className="w-4 h-4 text-teal-600" />
-                  : <Bot className="w-4 h-4 text-purple-600" />
-                }
-              </div>
-              <div className={`max-w-[70%] ${msg.role === 'user' ? 'text-right' : ''}`}>
-                <div className={`rounded-2xl px-4 py-3 ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-tr-md'
-                    : 'bg-card border border-border rounded-tl-md'
-                }`}>
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+            <div className="flex items-center justify-center h-full">
+              <div className="max-w-sm text-center">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4 mb-4">
+                  <AlertCircle className="w-8 h-8 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+                  <h3 className="font-semibold text-amber-900 dark:text-amber-300 mb-1">No API Key Configured</h3>
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
+                    Add an API key to start chatting with your agents
+                  </p>
+                  <button
+                    onClick={() => onNavigateToSettings?.('settings')}
+                    className="text-sm px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Go to Settings
+                  </button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 px-1">{msg.timestamp}</p>
               </div>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+          )}
+          {!loading && !apiKeyError && (
+            <div className="flex-1 flex flex-col min-h-0 px-4 pb-4">
+              <Conversation className="flex-1 min-h-0">
+                <ConversationContent className="px-2 py-4">
+                  {messages.length === 0 && selectedAgent && (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <Bot className="w-12 h-12 text-muted-foreground mb-4" />
+                      <p className="text-lg font-semibold text-foreground mb-2">Chat with {selectedAgent}</p>
+                      <p className="text-muted-foreground">Start a conversation to see messages here</p>
+                    </div>
+                  )}
+                  {messages.map((message, index) => (
+                    <Message from={message.role} key={message.id}>
+                      <MessageContent>
+                        {message.role === 'user' ? (
+                          message.parts.map((part, i) =>
+                            part.type === 'text' ? (
+                              <p key={`${message.id}-${i}`} className="text-sm whitespace-pre-wrap">{part.text}</p>
+                            ) : null
+                          )
+                        ) : (
+                          <MessageParts
+                            message={message}
+                            isLastMessage={index === messages.length - 1}
+                            isStreaming={isStreaming}
+                          />
+                        )}
+                      </MessageContent>
+                    </Message>
+                  ))}
+                  {status === 'submitted' && (
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm py-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Thinking...</span>
+                    </div>
+                  )}
+                </ConversationContent>
+                <ConversationScrollButton />
+              </Conversation>
 
-        {/* Input */}
-        <div className="p-4 border-t border-border bg-card">
-          <div className="flex items-center gap-3">
-            <button className="p-2 rounded-lg hover:bg-muted transition-colors">
-              <Paperclip className="w-5 h-5 text-muted-foreground" />
-            </button>
-            <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder={selectedAgent ? `Message ${selectedAgent}...` : 'Select an agent first...'}
-              disabled={!selectedAgent || apiKeyError || sendingMessage}
-              className="flex-1 px-4 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || apiKeyError || !selectedAgent || sendingMessage}
-              title={apiKeyError ? 'No API key configured. Add one in Settings' : !selectedAgent ? 'Select an agent first' : ''}
-              className="p-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {sendingMessage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            </button>
-          </div>
+              {/* Input */}
+              <PromptInput
+                onSubmit={handleSubmit}
+                className="mt-2 w-full max-w-3xl mx-auto"
+              >
+                <PromptInputBody>
+                  <PromptInputTextarea
+                    value={inputText}
+                    onChange={(e) => setInputText(e.currentTarget.value)}
+                    placeholder={selectedAgent ? `Message ${selectedAgent}...` : 'Select an agent first...'}
+                    disabled={!selectedAgent || apiKeyError}
+                  />
+                </PromptInputBody>
+                <PromptInputFooter>
+                  <PromptInputTools />
+                  <PromptInputSubmit
+                    disabled={!inputText.trim() || !selectedAgent || apiKeyError}
+                    status={isStreaming ? 'streaming' : 'ready'}
+                  />
+                </PromptInputFooter>
+              </PromptInput>
+            </div>
+          )}
         </div>
       </div>
     </div>

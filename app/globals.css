@@ -2,6 +2,8 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+@source "../node_modules/streamdown/dist/*.js";
+
 :root {
   --radius: 0.5rem;
   --background: 0 0% 100%;
