@@ -318,39 +318,55 @@ export async function POST(req: NextRequest) {
           execute: scrapeWebpageExecute,
         }),
         searchWeb: tool({
-          description: 'Search the web for information. Use this when you need to find pricing, features, reviews, or any information that might not be on a single page. Returns search result snippets.',
+          description: 'Search the web using Google. Use this to find pricing, features, reviews, or any information. Returns titles, snippets, and URLs from search results.',
           inputSchema: zodSchema(z.object({
             query: z.string().describe('The search query'),
           })),
           execute: async ({ query }: { query: string }) => {
             try {
-              const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+              // Use Google's web search (no API key needed)
+              const res = await fetch(`https://www.google.com/search?q=${encodeURIComponent(query)}&num=8`, {
                 headers: {
-                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                  'Accept-Language': 'en-US,en;q=0.9',
                 },
                 signal: AbortSignal.timeout(10000),
               })
               if (!res.ok) return { query, results: [], error: `Search failed: HTTP ${res.status}` }
               const html = await res.text()
-              // Extract result snippets from DuckDuckGo HTML
-              const results: { title: string; snippet: string; url: string }[] = []
-              const resultBlocks = html.match(/<div class="result[^"]*"[^>]*>[\s\S]*?<\/div>\s*<\/div>/g) || []
-              for (const block of resultBlocks.slice(0, 8)) {
-                const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*>(.*?)<\/a>/s)
-                const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/s)
-                const urlMatch = block.match(/<a[^>]*class="result__url"[^>]*href="([^"]*)"/)
-                if (titleMatch || snippetMatch) {
-                  results.push({
-                    title: (titleMatch?.[1] || '').replace(/<[^>]+>/g, '').trim(),
-                    snippet: (snippetMatch?.[1] || '').replace(/<[^>]+>/g, '').trim(),
-                    url: (urlMatch?.[1] || '').trim(),
-                  })
-                }
-              }
-              return { query, results }
+              
+              // Extract text content from Google results page
+              const textContent = html
+                .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/g, '"')
+                .replace(/\s+/g, ' ')
+                .trim()
+              
+              // Return raw text for the LLM to interpret
+              const truncated = textContent.length > 6000 ? textContent.slice(0, 6000) : textContent
+              return { query, content: truncated }
             } catch (err) {
-              return { query, results: [], error: `Search failed: ${err instanceof Error ? err.message : String(err)}` }
+              return { query, content: '', error: `Search failed: ${err instanceof Error ? err.message : String(err)}` }
             }
+          },
+        }),
+        fetchSubpage: tool({
+          description: 'Fetch a specific subpage of a website (e.g., /pricing, /about, /features). Use when you know a website has a specific page with the information needed.',
+          inputSchema: zodSchema(z.object({
+            baseUrl: z.string().describe('The base URL of the website (e.g., https://example.com)'),
+            path: z.string().describe('The subpage path (e.g., /pricing, /about)'),
+          })),
+          execute: async ({ baseUrl, path }: { baseUrl: string; path: string }) => {
+            const url = cleanUrl(baseUrl).replace(/\/$/, '') + (path.startsWith('/') ? path : `/${path}`)
+            return scrapeWebpageExecute({ url })
           },
         }),
       },
