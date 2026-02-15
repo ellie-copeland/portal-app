@@ -13,6 +13,67 @@ const storeKeySchema = z.object({
   label: z.string().max(100).optional(),
 })
 
+// Validate an API key by making a lightweight request to the provider
+async function validateApiKey(provider: string, key: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    switch (provider) {
+      case 'openai': {
+        const res = await fetch('https://api.openai.com/v1/models', {
+          headers: { 'Authorization': `Bearer ${key}` },
+          signal: AbortSignal.timeout(10000),
+        })
+        if (res.status === 401) return { valid: false, error: 'Invalid OpenAI API key' }
+        if (res.status === 429) return { valid: true } // rate limited = key is valid
+        return { valid: res.ok }
+      }
+      case 'anthropic': {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+          signal: AbortSignal.timeout(10000),
+        })
+        if (res.status === 401) return { valid: false, error: 'Invalid Anthropic API key' }
+        if (res.status === 429) return { valid: true }
+        return { valid: res.ok || res.status === 400 } // 400 = valid key, bad request
+      }
+      case 'google': {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`, {
+          signal: AbortSignal.timeout(10000),
+        })
+        if (res.status === 400 || res.status === 403) return { valid: false, error: 'Invalid Google AI API key' }
+        if (res.status === 429) return { valid: true }
+        return { valid: res.ok }
+      }
+      case 'openrouter': {
+        const res = await fetch('https://openrouter.ai/api/v1/auth/key', {
+          headers: { 'Authorization': `Bearer ${key}` },
+          signal: AbortSignal.timeout(10000),
+        })
+        if (res.status === 401) return { valid: false, error: 'Invalid OpenRouter API key' }
+        return { valid: res.ok }
+      }
+      case 'mistral': {
+        const res = await fetch('https://api.mistral.ai/v1/models', {
+          headers: { 'Authorization': `Bearer ${key}` },
+          signal: AbortSignal.timeout(10000),
+        })
+        if (res.status === 401) return { valid: false, error: 'Invalid Mistral API key' }
+        return { valid: res.ok }
+      }
+      default:
+        return { valid: true } // skip validation for unknown providers
+    }
+  } catch {
+    // Network error — don't block, allow save
+    return { valid: true }
+  }
+}
+
 // POST - Store an LLM API key
 export async function POST(req: NextRequest) {
   const ctx = await getAuthContext(req)
@@ -25,6 +86,13 @@ export async function POST(req: NextRequest) {
   }
 
   const { provider, key, label } = parsed.data
+
+  // Validate key before saving
+  const validation = await validateApiKey(provider, key)
+  if (!validation.valid) {
+    return NextResponse.json({ error: { key: [validation.error || 'Invalid API key'] } }, { status: 400 })
+  }
+
   const keyHash = await bcryptjs.hash(key, 10)
   const keyPrefix = key.substring(0, 8)
   const encryptedKey = encrypt(key)
