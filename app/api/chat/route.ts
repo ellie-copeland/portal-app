@@ -271,7 +271,20 @@ export async function POST(req: NextRequest) {
   const modelInstance = getProviderForModel(model, apiKey)
 
   // Convert UIMessages to model messages for the AI SDK
-  const modelMessages = await convertToModelMessages(uiMessages)
+  let modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>
+  try {
+    modelMessages = await convertToModelMessages(uiMessages)
+  } catch (convErr) {
+    // Fallback: convert manually if UIMessage format doesn't match expectations
+    console.error('convertToModelMessages failed, using fallback:', convErr)
+    modelMessages = uiMessages.map((m: UIMessage) => {
+      const text = m.parts
+        ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map(p => p.text)
+        .join('\n') || (m as any).content || ''
+      return { role: m.role as 'user' | 'assistant', content: text }
+    })
+  }
 
   try {
     const result = streamText({
