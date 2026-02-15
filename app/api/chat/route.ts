@@ -363,7 +363,7 @@ export async function POST(req: NextRequest) {
           },
         }),
       },
-      stopWhen: stepCountIs(3),
+      stopWhen: stepCountIs(5),
       async onFinish({ text, totalUsage }) {
         const tokensUsed = (totalUsage?.inputTokens || 0) + (totalUsage?.outputTokens || 0)
         await prisma.message.create({
