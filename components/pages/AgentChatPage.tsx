@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { Bot, Phone, AlertCircle, Loader2, Plus, Paperclip, X, FileText, ImageIcon } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { authHeaders } from '@/lib/fetch-auth'
@@ -348,6 +349,7 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
   }, [apiKeyError, selectedAgentId, sendMessage])
 
   return (
+    <TooltipProvider>
     <div className="flex h-full">
       {/* Agent list sidebar */}
       <div className="w-72 border-r border-border bg-card flex-shrink-0 flex flex-col hidden sm:flex">
@@ -552,5 +554,6 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
         </div>
       </div>
     </div>
+    </TooltipProvider>
   )
 }
