@@ -5,7 +5,8 @@ const encryptionKey = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET
 if (!encryptionKey) {
   throw new Error('ENCRYPTION_KEY or JWT_SECRET environment variable is required')
 }
-const KEY = crypto.scryptSync(encryptionKey, 'assistable-portal-salt-v1', 32)
+// IMPORTANT: salt must match what was used to encrypt existing data
+const KEY = crypto.scryptSync(encryptionKey, 'salt', 32)
 
 export function encrypt(text: string): string {
   const iv = crypto.randomBytes(16)
