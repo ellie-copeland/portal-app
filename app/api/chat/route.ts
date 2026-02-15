@@ -158,6 +158,7 @@ function getProviderForModel(model: string, apiKey: string) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const limited = rateLimit(getClientIp(req), 'llm')
   if (limited) return limited
 
@@ -407,5 +408,9 @@ export async function POST(req: NextRequest) {
       data: { conversationId: convId!, role: 'ASSISTANT', content: '❌ Something went wrong. Please try again.' },
     })
     return NextResponse.json({ error: 'Chat request failed. Please try again.', conversationId: convId }, { status: 500 })
+  }
+  } catch (outerErr) {
+    console.error('Chat route uncaught error:', outerErr)
+    return NextResponse.json({ error: `Unexpected error: ${outerErr instanceof Error ? outerErr.message : String(outerErr)}` }, { status: 500 })
   }
 }
