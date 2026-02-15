@@ -7,7 +7,7 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { streamText, tool, stepCountIs, zodSchema, UIMessage } from 'ai'
+import { streamText, tool, stepCountIs, zodSchema, UIMessage, convertToModelMessages } from 'ai'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -277,19 +277,25 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now()
   const modelInstance = getProviderForModel(model, apiKey)
 
-  // Convert UIMessages to simple role/content pairs for the model
-  const modelMessages = uiMessages
-    .filter((m: UIMessage) => m.role === 'user' || m.role === 'assistant')
-    .map((m: UIMessage) => {
-      const text = m.parts
-        ?.filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
-        .join('\n') || (m as any).content || ''
-      return { role: m.role as 'user' | 'assistant', content: text }
-    })
-    .filter(m => m.content.trim().length > 0)
+  // Convert UIMessages to model messages (preserves tool-call and tool-result parts for multi-step)
+  let modelMessages: any[]
+  try {
+    modelMessages = convertToModelMessages(uiMessages)
+  } catch (convErr) {
+    // Fallback: extract text only (tool calls won't work in multi-step)
+    console.warn('convertToModelMessages failed, falling back to text-only:', convErr)
+    modelMessages = uiMessages
+      .filter((m: UIMessage) => m.role === 'user' || m.role === 'assistant')
+      .map((m: UIMessage) => {
+        const text = m.parts
+          ?.filter((p: any) => p.type === 'text')
+          .map((p: any) => p.text)
+          .join('\n') || (m as any).content || ''
+        return { role: m.role as 'user' | 'assistant', content: text }
+      })
+      .filter(m => m.content.trim().length > 0)
+  }
 
-  // Ensure we have valid messages
   if (!modelMessages || modelMessages.length === 0) {
     return NextResponse.json({ error: 'No valid messages to send' }, { status: 400 })
   }
@@ -389,8 +395,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Use data stream response — handles multi-step tool calling properly
-    const response = result.toDataStreamResponse()
+    const response = result.toUIMessageStreamResponse()
 
     // Add conversation ID header
     const newHeaders = new Headers(response.headers)
