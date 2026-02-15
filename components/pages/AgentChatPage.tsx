@@ -290,8 +290,10 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
   const handleSelectAgent = async (agentName: string, agentId: string) => {
     setSelectedAgent(agentName)
     setSelectedAgentId(agentId)
+    selectedAgentIdRef.current = agentId
     setMessages([])
     setConversationId(null)
+    conversationIdRef.current = null
     if (typeof window !== 'undefined') localStorage.setItem('lastChatAgentId', agentId)
 
     // Try to load most recent conversation for this agent
@@ -303,6 +305,7 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
         if (convs.length > 0) {
           const latest = convs[0]
           setConversationId(latest.id)
+          conversationIdRef.current = latest.id
           const msgRes = await fetch(`/api/conversations/${latest.id}/messages`, { headers: authHeaders() })
           if (msgRes.ok) {
             const msgData = await msgRes.json()
