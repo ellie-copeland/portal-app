@@ -389,8 +389,8 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Use AI SDK's UIMessage stream response for useChat compatibility
-    const response = result.toUIMessageStreamResponse()
+    // Use data stream response — handles multi-step tool calling properly
+    const response = result.toDataStreamResponse()
 
     // Add conversation ID header
     const newHeaders = new Headers(response.headers)

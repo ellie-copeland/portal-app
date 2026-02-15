@@ -111,8 +111,21 @@ function MessageParts({ message, isLastMessage, isStreaming }: {
             </MessageResponse>
           )
         }
-        // Tool parts: type starts with 'tool-' (e.g. 'tool-scrapeWebpage')
-        if (part.type.startsWith('tool-') && part.type !== 'tool-invocation') {
+        // Tool invocation parts (data stream protocol)
+        if (part.type === 'tool-invocation') {
+          const toolPart = part as any
+          return (
+            <ToolCallPart
+              key={`${message.id}-${i}`}
+              toolName={toolPart.toolInvocation?.toolName ?? toolPart.toolName ?? 'unknown'}
+              state={toolPart.toolInvocation?.state ?? toolPart.state ?? 'call'}
+              args={toolPart.toolInvocation?.args ?? toolPart.args ?? {}}
+              result={toolPart.toolInvocation?.result ?? toolPart.result}
+            />
+          )
+        }
+        // Legacy tool parts (type starts with 'tool-')
+        if (part.type.startsWith('tool-')) {
           const toolPart = part as any
           const toolName = part.type.replace('tool-', '')
           return (
