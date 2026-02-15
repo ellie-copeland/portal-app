@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Bot, Phone, AlertCircle, Loader2, Plus } from 'lucide-react'
+import { Bot, Phone, AlertCircle, Loader2, Plus, Paperclip, X, FileText, ImageIcon } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { authHeaders } from '@/lib/fetch-auth'
 import { useChat } from '@ai-sdk/react'
@@ -29,6 +29,12 @@ import {
   PromptInputBody,
   PromptInputFooter,
   PromptInputTools,
+  PromptInputButton,
+  PromptInputActionAddAttachments,
+  PromptInputActionMenu,
+  PromptInputActionMenuTrigger,
+  PromptInputActionMenuContent,
+  usePromptInputAttachments,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 
@@ -134,6 +140,57 @@ function MessageParts({ message, isLastMessage, isStreaming }: {
         return null
       })}
     </>
+  )
+}
+
+// Attachment previews shown above the input
+function AttachmentPreviews() {
+  const { files, remove } = usePromptInputAttachments()
+  if (files.length === 0) return null
+
+  return (
+    <div className="flex gap-2 flex-wrap px-1 pb-2">
+      {files.map((file) => {
+        const isImage = file.mediaType?.startsWith('image/')
+        return (
+          <div
+            key={file.id}
+            className="relative group flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-2 py-1.5 text-xs"
+          >
+            {isImage && file.url ? (
+              <img
+                src={file.url}
+                alt={file.filename || 'attachment'}
+                className="w-8 h-8 rounded object-cover"
+              />
+            ) : (
+              <FileText className="w-4 h-4 text-muted-foreground" />
+            )}
+            <span className="max-w-[120px] truncate text-foreground">{file.filename}</span>
+            <button
+              type="button"
+              onClick={() => remove(file.id)}
+              className="ml-1 p-0.5 rounded-full hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Paperclip button that opens file dialog
+function AttachmentButton() {
+  const { openFileDialog } = usePromptInputAttachments()
+  return (
+    <PromptInputButton
+      tooltip="Attach files"
+      onClick={openFileDialog}
+    >
+      <Paperclip className="size-4" />
+    </PromptInputButton>
   )
 }
 
@@ -259,8 +316,25 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
   }
 
   const handleSubmit = useCallback((message: PromptInputMessage) => {
-    if (!message.text?.trim() || apiKeyError || !selectedAgentId) return
-    sendMessage({ text: message.text })
+    if ((!message.text?.trim() && message.files.length === 0) || apiKeyError || !selectedAgentId) return
+
+    // Build parts array: text + any file attachments
+    const parts: Array<{ type: 'text'; text: string } | { type: 'file'; filename?: string; mediaType: string; url: string }> = []
+
+    if (message.text?.trim()) {
+      parts.push({ type: 'text', text: message.text })
+    }
+
+    for (const file of message.files) {
+      parts.push({
+        type: 'file',
+        filename: file.filename,
+        mediaType: file.mediaType || 'application/octet-stream',
+        url: file.url,
+      })
+    }
+
+    sendMessage({ parts })
     setInputText('')
   }, [apiKeyError, selectedAgentId, sendMessage])
 
@@ -393,11 +467,29 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
                     <Message from={message.role} key={message.id}>
                       <MessageContent>
                         {message.role === 'user' ? (
-                          message.parts.map((part, i) =>
-                            part.type === 'text' ? (
-                              <p key={`${message.id}-${i}`} className="text-sm whitespace-pre-wrap">{part.text}</p>
-                            ) : null
-                          )
+                          message.parts.map((part, i) => {
+                            if (part.type === 'text') {
+                              return <p key={`${message.id}-${i}`} className="text-sm whitespace-pre-wrap">{part.text}</p>
+                            }
+                            if (part.type === 'file') {
+                              const filePart = part as any
+                              const isImage = filePart.mediaType?.startsWith('image/')
+                              return isImage ? (
+                                <img
+                                  key={`${message.id}-${i}`}
+                                  src={filePart.url}
+                                  alt={filePart.filename || 'uploaded image'}
+                                  className="max-w-xs rounded-lg mt-2"
+                                />
+                              ) : (
+                                <div key={`${message.id}-${i}`} className="flex items-center gap-2 mt-2 bg-muted/50 rounded-lg px-3 py-2 text-xs">
+                                  <FileText className="w-4 h-4 text-muted-foreground" />
+                                  <span className="text-foreground">{filePart.filename || 'file'}</span>
+                                </div>
+                              )
+                            }
+                            return null
+                          })
                         ) : (
                           <MessageParts
                             message={message}
@@ -422,7 +514,12 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
               <PromptInput
                 onSubmit={handleSubmit}
                 className="mt-2 w-full max-w-3xl mx-auto"
+                accept="image/*,.pdf,.txt,.md,.csv,.json,.xml,.html,.js,.ts,.py,.java,.c,.cpp,.go,.rs,.rb,.sh"
+                multiple
+                maxFiles={5}
+                maxFileSize={10 * 1024 * 1024}
               >
+                <AttachmentPreviews />
                 <PromptInputBody>
                   <PromptInputTextarea
                     value={inputText}
@@ -432,9 +529,11 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
                   />
                 </PromptInputBody>
                 <PromptInputFooter>
-                  <PromptInputTools />
+                  <PromptInputTools>
+                    <AttachmentButton />
+                  </PromptInputTools>
                   <PromptInputSubmit
-                    disabled={!inputText.trim() || !selectedAgent || apiKeyError}
+                    disabled={!selectedAgent || apiKeyError}
                     status={isStreaming ? 'streaming' : 'ready'}
                   />
                 </PromptInputFooter>

@@ -179,10 +179,16 @@ export async function POST(req: NextRequest) {
 
   // Get the latest user message content for DB storage
   const lastUserMsg = [...uiMessages].reverse().find(m => m.role === 'user')
-  const userContent = lastUserMsg?.parts
+  const textParts = lastUserMsg?.parts
     ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-    .map(p => p.text)
-    .join('\n') || ''
+    .map(p => p.text) || []
+  const fileParts = lastUserMsg?.parts
+    ?.filter((p): p is any => p.type === 'file') || []
+  const fileNames = fileParts.map((f: any) => f.filename || 'file').join(', ')
+  const userContent = [
+    ...textParts,
+    ...(fileNames ? [`[Attached: ${fileNames}]`] : []),
+  ].join('\n') || ''
 
   // Verify agent access
   const agent = await prisma.agent.findFirst({
