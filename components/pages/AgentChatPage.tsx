@@ -57,7 +57,7 @@ function ToolCallPart({ toolName, state, args, result }: {
   args: Record<string, unknown>
   result?: unknown
 }) {
-  const isRunning = state !== 'result'
+  const isRunning = !['result', 'output-available', 'output-error'].includes(state)
   return (
     <div className="my-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
       <div className="flex items-center gap-2">
@@ -77,7 +77,8 @@ function ToolCallPart({ toolName, state, args, result }: {
           </span>
         )}
       </div>
-      {state === 'result' && <div className="mt-1 text-muted-foreground">✓ Done</div>}
+      {['result', 'output-available'].includes(state) && <div className="mt-1 text-muted-foreground">✓ Done</div>}
+      {state === 'output-error' && <div className="mt-1 text-red-500">✗ Error</div>}
     </div>
   )
 }
