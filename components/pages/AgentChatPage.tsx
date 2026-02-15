@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Bot, Phone, AlertCircle, Loader2, Plus, Paperclip, X, FileText, ImageIcon } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 import { authHeaders } from '@/lib/fetch-auth'
@@ -204,24 +204,30 @@ export default function AgentChatPage({ onNavigateToSettings }: AgentChatPagePro
   const [loading, setLoading] = useState(true)
   const [inputText, setInputText] = useState('')
 
-  // Create transport with custom headers and body
+  // Use refs so transport body always reads latest values without re-creating transport
+  const selectedAgentIdRef = useRef<string | null>(null)
+  const conversationIdRef = useRef<string | null>(null)
+  useEffect(() => { selectedAgentIdRef.current = selectedAgentId }, [selectedAgentId])
+  useEffect(() => { conversationIdRef.current = conversationId }, [conversationId])
+
+  // Create transport once — body callback reads refs for latest values
   const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/chat',
     headers: () => authHeaders(),
     body: () => ({
-      agentId: selectedAgentId,
-      conversationId,
+      agentId: selectedAgentIdRef.current,
+      conversationId: conversationIdRef.current,
     }),
     fetch: async (url, init) => {
       const response = await fetch(url, init)
-      // Capture conversation ID from response header
       const newConvId = response.headers.get('X-Conversation-Id')
-      if (newConvId && !conversationId) {
+      if (newConvId) {
         setConversationId(newConvId)
+        conversationIdRef.current = newConvId
       }
       return response
     },
-  }), [selectedAgentId, conversationId])
+  }), [])
 
   const {
     messages,
