@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Crown, Mail, MoreHorizontal, Plus, Shield, Trash2, User, UserCheck, UserPlus, AlertCircle, Loader, Copy, Check } from 'lucide-react'
+import { authHeaders } from '@/lib/fetch-auth'
 
 interface TeamMember {
   id: string
@@ -65,13 +66,17 @@ export default function TeamPage() {
           return
         }
 
-        const response = await fetch(`/api/teams/${activeTeamId}`)
+        const response = await fetch(`/api/teams/${activeTeamId}`, { headers: authHeaders() })
         if (response.ok) {
           const data = await response.json()
+          // Normalize _count to include members
+          if (data._count && !data._count.members) {
+            data._count.members = data.members?.length || 0
+          }
           setTeamData(data)
 
           // Load pending invitations
-          const invitesResponse = await fetch(`/api/teams/${activeTeamId}/invite`)
+          const invitesResponse = await fetch(`/api/teams/${activeTeamId}/invite`, { headers: authHeaders() })
           if (invitesResponse.ok) {
             const invites = await invitesResponse.json()
             setPendingInvitations(invites)
@@ -99,7 +104,7 @@ export default function TeamPage() {
     try {
       const response = await fetch(`/api/teams/${teamData.id}/invite`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           email: inviteEmail,
           role: inviteRole,

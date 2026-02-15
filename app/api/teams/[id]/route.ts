@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params: paramsPromise }: { params:
       members: {
         include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
       },
-      _count: { select: { agents: true, executions: true, tasks: true } },
+      _count: { select: { members: true, agents: true, executions: true, tasks: true } },
     },
   })
 
