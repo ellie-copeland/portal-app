@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
   // Convert UIMessages to model messages (preserves tool-call and tool-result parts for multi-step)
   let modelMessages: any[]
   try {
-    modelMessages = convertToModelMessages(uiMessages)
+    modelMessages = await convertToModelMessages(uiMessages)
   } catch (convErr) {
     // Fallback: extract text only (tool calls won't work in multi-step)
     console.warn('convertToModelMessages failed, falling back to text-only:', convErr)
