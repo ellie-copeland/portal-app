@@ -284,10 +284,13 @@ export async function POST(req: NextRequest) {
     // Fallback: convert manually if UIMessage format doesn't match expectations
     console.error('convertToModelMessages failed, using fallback:', convErr)
     modelMessages = uiMessages.map((m: UIMessage) => {
-      const text = m.parts
+      const textParts = m.parts
         ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map(p => p.text)
-        .join('\n') || (m as any).content || ''
+        .map(p => p.text) || []
+      const fileParts = m.parts
+        ?.filter((p): p is any => p.type === 'file') || []
+      const fileRefs = fileParts.map((f: any) => `[File: ${f.filename || 'attachment'}]`)
+      const text = [...textParts, ...fileRefs].join('\n') || (m as any).content || ''
       return { role: m.role as 'user' | 'assistant', content: text }
     })
   }

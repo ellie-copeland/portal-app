@@ -3,9 +3,6 @@ import { getAuthContext, isAuthContext } from '@/lib/middleware'
 
 export const dynamic = 'force-dynamic'
 
-// TODO: Migrate to Supabase Storage when available
-// Currently returns a placeholder URL — files are not persisted
-
 export async function POST(req: NextRequest) {
   const ctx = await getAuthContext(req)
   if (!isAuthContext(ctx)) return ctx
@@ -23,15 +20,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 400 })
     }
 
-    // TODO: Store file in Supabase Storage and return real URL
-    const placeholderUrl = `/uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+    // Convert file to base64 data URL
+    // This works on Vercel (read-only filesystem) and locally
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    const base64 = Buffer.from(binary, 'binary').toString('base64')
+    const dataUrl = `data:${file.type};base64,${base64}`
 
     return NextResponse.json({
-      url: placeholderUrl,
+      url: dataUrl,
       name: file.name,
       size: file.size,
       type: file.type,
-      message: 'File upload stubbed — storage not yet configured',
     })
   } catch (error) {
     console.error('Upload error:', error)
