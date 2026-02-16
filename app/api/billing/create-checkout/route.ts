@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthContext, isAuthContext } from '@/lib/middleware'
 import { stripe, ensurePrices, TIERS } from '@/lib/stripe'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
+  const ctx = await getAuthContext(req)
+  if (!isAuthContext(ctx)) return ctx
+
   try {
-    const { lookup, email, teamId } = await req.json()
+    const { lookup } = await req.json()
+    const email = ctx.email
+    const teamId = ctx.teamId
 
     if (!lookup || !TIERS.find(t => t.lookup === lookup)) {
       return NextResponse.json({ error: 'Invalid tier' }, { status: 400 })
