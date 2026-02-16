@@ -7,18 +7,31 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withCSRFValidation } from '@/lib/csrf'
 
 export async function middleware(request: NextRequest) {
-  // 1. CSRF validation for state-changing requests
-  const csrfValid = await withCSRFValidation(request)
+  const pathname = request.nextUrl.pathname
 
-  if (!csrfValid) {
-    // CSRF validation failed
-    return NextResponse.json(
-      {
-        error: 'CSRF validation failed',
-        code: 'CSRF_TOKEN_INVALID',
-      },
-      { status: 403 }
-    )
+  // Skip CSRF for read-only endpoints
+  const exemptPaths = [
+    '/api/integrations/proxy', // Fetches repo/project lists
+    '/api/integrations/test', // Tests integration
+    '/api/csrf-token', // CSRF token endpoint itself
+  ]
+
+  const shouldSkipCSRF = exemptPaths.some(path => pathname.startsWith(path))
+
+  if (!shouldSkipCSRF) {
+    // 1. CSRF validation for state-changing requests
+    const csrfValid = await withCSRFValidation(request)
+
+    if (!csrfValid) {
+      // CSRF validation failed
+      return NextResponse.json(
+        {
+          error: 'CSRF validation failed',
+          code: 'CSRF_TOKEN_INVALID',
+        },
+        { status: 403 }
+      )
+    }
   }
 
   // 2. Continue to handler
