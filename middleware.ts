@@ -34,24 +34,9 @@ export async function middleware(request: NextRequest) {
  * Add security headers to response
  */
 function addSecurityHeaders(response: NextResponse) {
-  // Content Security Policy - with unsafe-inline for Next.js compatibility
-  // TODO: Implement proper nonce injection for all scripts
-  response.headers.set(
-    'Content-Security-Policy',
-    `
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;
-    font-src 'self' https://fonts.gstatic.com;
-    img-src 'self' data: https:;
-    connect-src 'self' https:;
-    frame-ancestors 'none';
-    base-uri 'self';
-    form-action 'self';
-    object-src 'none';
-    upgrade-insecure-requests;
-  `.replace(/\n/g, ' ')
-  )
+  // Content Security Policy - disabled temporarily for debugging
+  // TODO: Fix nonce injection for Next.js inline scripts
+  // response.headers.set('Content-Security-Policy', ...CSP rules...)
 
   // Additional security headers
   response.headers.set('X-Content-Type-Options', 'nosniff')
@@ -60,22 +45,7 @@ function addSecurityHeaders(response: NextResponse) {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
 
-  // Store nonce for use in components
-  response.headers.set('X-Nonce', nonce)
-
   return response
-}
-
-/**
- * Generate a random nonce for inline scripts
- */
-function generateNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
-  let nonce = ''
-  for (let i = 0; i < 16; i++) {
-    nonce += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return nonce
 }
 
 // Configure which routes use the middleware
