@@ -34,14 +34,14 @@ export async function middleware(request: NextRequest) {
  * Add security headers to response
  */
 function addSecurityHeaders(response: NextResponse) {
-  // Content Security Policy - with nonce support for inline scripts
-  const nonce = generateNonce()
+  // Content Security Policy - with unsafe-inline for Next.js compatibility
+  // TODO: Implement proper nonce injection for all scripts
   response.headers.set(
     'Content-Security-Policy',
     `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net;
-    style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com https://cdn.jsdelivr.net;
+    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;
     font-src 'self' https://fonts.gstatic.com;
     img-src 'self' data: https:;
     connect-src 'self' https:;
