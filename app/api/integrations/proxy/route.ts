@@ -6,8 +6,9 @@ export const dynamic = 'force-dynamic'
 // Proxy requests to external APIs using user-provided tokens
 // This avoids CORS issues and keeps tokens server-side
 export async function POST(req: NextRequest) {
-  const ctx = await getAuthContext(req)
-  if (!isAuthContext(ctx)) return ctx
+  // Auth is optional for this endpoint - tokens are user-provided
+  // const ctx = await getAuthContext(req)
+  // if (!isAuthContext(ctx)) return ctx
 
   try {
     const { provider, token, action } = await req.json()
