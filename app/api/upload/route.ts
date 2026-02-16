@@ -15,6 +15,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
+    // Validate file type (allowlist only)
+    const ALLOWED_TYPES = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf',
+      'text/plain', 'text/csv',
+      'application/json',
+    ]
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json({ error: `Invalid file type: ${file.type}. Allowed: images, PDF, text, CSV, JSON.` }, { status: 400 })
+    }
+
     // Validate file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 400 })

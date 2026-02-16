@@ -27,11 +27,37 @@ const DEFAULTS: Record<string, RateLimitConfig> = {
 }
 
 export function rateLimit(
-  _identifier: string,
-  _preset: keyof typeof DEFAULTS = 'api',
-  _config?: Partial<RateLimitConfig>
+  identifier: string,
+  preset: keyof typeof DEFAULTS = 'api',
+  config?: Partial<RateLimitConfig>
 ): NextResponse | null {
-  // Rate limiting disabled during testing — will re-enable with Redis-backed limiter
+  const { windowMs, max } = { ...DEFAULTS[preset], ...config }
+  const key = `${preset}:${identifier}`
+  const now = Date.now()
+
+  const entry = store.get(key)
+  if (!entry || now > entry.resetAt) {
+    store.set(key, { count: 1, resetAt: now + windowMs })
+    return null
+  }
+
+  entry.count++
+  if (entry.count > max) {
+    const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(retryAfter),
+          'X-RateLimit-Limit': String(max),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(entry.resetAt),
+        },
+      }
+    )
+  }
+
   return null
 }
 
