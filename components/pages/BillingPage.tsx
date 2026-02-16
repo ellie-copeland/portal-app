@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DollarSign, TrendingUp, Zap, BarChart3, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react'
+import { DollarSign, TrendingUp, Zap, BarChart3, ArrowUpRight, ArrowDownRight, Loader2, CreditCard } from 'lucide-react'
 import { apiClient } from '@/lib/api-client'
 
 interface ExecutionRecord {
@@ -40,6 +40,31 @@ export default function BillingPage() {
   const [executions, setExecutions] = useState<ExecutionRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
+
+  const subscriptionTiers = [
+    { lookup: 'starter_monthly', name: 'Starter', price: 29, features: ['5 agents', '10k executions/mo', 'Email support'] },
+    { lookup: 'pro_monthly', name: 'Pro', price: 79, features: ['25 agents', '100k executions/mo', 'Priority support', 'Custom integrations'] },
+    { lookup: 'enterprise_monthly', name: 'Enterprise', price: 199, features: ['Unlimited agents', 'Unlimited executions', 'Dedicated support', 'SSO & audit logs'] },
+  ]
+
+  const handleSubscribe = async (lookup: string) => {
+    setCheckoutLoading(lookup)
+    try {
+      const res = await fetch('/api/billing/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookup }),
+      })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+      else setError(data.error || 'Failed to start checkout')
+    } catch {
+      setError('Failed to start checkout')
+    } finally {
+      setCheckoutLoading(null)
+    }
+  }
 
   // Fetch executions on mount
   useEffect(() => {
@@ -232,6 +257,32 @@ export default function BillingPage() {
             </div>
           </div>
         ) : (
+          <>
+          {/* Subscription Plans */}
+          <div className="grid grid-cols-3 gap-6 mb-8">
+            {subscriptionTiers.map(tier => (
+              <div key={tier.lookup} className="bg-card border border-border rounded-xl p-6 flex flex-col">
+                <h3 className="text-lg font-semibold text-foreground">{tier.name}</h3>
+                <p className="text-3xl font-bold text-foreground mt-2">${tier.price}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+                <ul className="mt-4 space-y-2 flex-1">
+                  {tier.features.map(f => (
+                    <li key={f} className="text-sm text-muted-foreground flex items-center gap-2">
+                      <span className="text-emerald-500">✓</span> {f}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => handleSubscribe(tier.lookup)}
+                  disabled={checkoutLoading === tier.lookup}
+                  className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {checkoutLoading === tier.lookup ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                  Subscribe
+                </button>
+              </div>
+            ))}
+          </div>
+
           <div className="grid grid-cols-3 gap-6">
             {/* Daily Cost Chart */}
             <div className="col-span-2 bg-card border border-border rounded-xl p-6">
@@ -317,6 +368,7 @@ export default function BillingPage() {
               </table>
             </div>
           </div>
+          </>
         )}
       </div>
     </div>

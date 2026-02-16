@@ -35,11 +35,16 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // TODO: Send email via Resend when RESEND_API_KEY is available
-    // For now, log the reset link to console for development/testing
     const resetUrl = `${req.nextUrl.origin}/reset-password?token=${token}`
-    // TODO: Send email via Resend when RESEND_API_KEY is available
-    // SECURITY: Never log reset tokens — send via email only
+
+    // Send reset email via Resend
+    try {
+      const { sendPasswordResetEmail } = await import('@/lib/resend')
+      await sendPasswordResetEmail(normalizedEmail, resetUrl)
+    } catch (emailErr) {
+      console.error('Failed to send reset email:', emailErr)
+      // Don't expose email delivery failures to user
+    }
 
     return NextResponse.json({ message: 'If that email exists, a reset link has been sent.' })
   } catch (error) {
