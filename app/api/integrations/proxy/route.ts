@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         if (action === 'repos') {
           const res = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
             headers: {
-              Authorization: `Bearer ${token}`,
+              Authorization: `token ${token}`,
               Accept: 'application/vnd.github.v3+json',
             },
           })
