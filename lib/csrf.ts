@@ -3,7 +3,6 @@
  * Server-side generation and validation for POST/PUT/DELETE requests
  */
 
-import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { NextRequest } from 'next/server'
 
@@ -16,7 +15,11 @@ const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
  * Returns a token that should be stored in a secure httpOnly cookie
  */
 export function generateCSRFToken(): string {
-  return crypto.randomBytes(32).toString('hex')
+  const randomBytes = new Uint8Array(32)
+  crypto.getRandomValues(randomBytes)
+  return Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 /**

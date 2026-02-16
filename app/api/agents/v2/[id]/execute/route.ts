@@ -89,7 +89,7 @@ export async function POST(
           data: {
             status: 'RUNNING',
             metadata: {
-              ...execution.metadata,
+              ...(typeof execution.metadata === 'object' && execution.metadata !== null ? execution.metadata : {}),
               supervisedActionId: result.data.supervisedActionId,
               awaitingApproval: true,
             },
@@ -116,7 +116,7 @@ export async function POST(
           error: result.error,
           completedAt: new Date(),
           metadata: {
-            ...execution.metadata,
+            ...(typeof execution.metadata === 'object' && execution.metadata !== null ? execution.metadata : {}),
             executionTime: result.metadata?.executionTime,
           },
         },

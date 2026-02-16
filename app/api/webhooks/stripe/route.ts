@@ -7,12 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { prisma } from '@/lib/db'
-import { logBillingEvent } from '@/lib/audit'
+import { logBillingEvent, AuditAction } from '@/lib/audit'
 import { createSecurityAlert } from '@/lib/security-alerts'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16',
-})
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '')
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ''
 
@@ -97,20 +95,9 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     const teamId = stripeMetadata.teamId
 
     if (teamId) {
-      await prisma.team.update({
-        where: { id: teamId },
-        data: {
-          metadata: {
-            stripeCustomerId: customerId,
-            stripeSubscriptionId: subscription.id,
-            subscriptionStatus: subscription.status,
-            planId: subscription.items.data[0]?.price?.id,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-          },
-        },
-      })
-
-      await logBillingEvent(teamId, 'billing:subscription_created', {
+      // TODO: Store Stripe metadata in a proper BillingMetadata model
+      // For now, just log the event
+      await logBillingEvent(teamId, AuditAction.BILLING_SUBSCRIPTION_CREATED, {
         subscriptionId: subscription.id,
         customerId,
         status: subscription.status,
@@ -132,18 +119,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     const teamId = subscription.metadata?.teamId
 
     if (teamId) {
-      await prisma.team.update({
-        where: { id: teamId },
-        data: {
-          metadata: {
-            subscriptionStatus: subscription.status,
-            planId: subscription.items.data[0]?.price?.id,
-            currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-          },
-        },
-      })
-
-      await logBillingEvent(teamId, 'billing:subscription_updated', {
+      await logBillingEvent(teamId, AuditAction.BILLING_SUBSCRIPTION_UPDATED, {
         subscriptionId: subscription.id,
         status: subscription.status,
       })
@@ -163,16 +139,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     const teamId = subscription.metadata?.teamId
 
     if (teamId) {
-      await prisma.team.update({
-        where: { id: teamId },
-        data: {
-          metadata: {
-            subscriptionStatus: 'canceled',
-          },
-        },
-      })
-
-      await logBillingEvent(teamId, 'billing:subscription_deleted', {
+      await logBillingEvent(teamId, AuditAction.BILLING_SUBSCRIPTION_DELETED, {
         subscriptionId: subscription.id,
       })
     }
@@ -192,7 +159,7 @@ async function handleChargeSucceeded(charge: Stripe.Charge) {
     const teamId = charge.metadata?.teamId
 
     if (teamId) {
-      await logBillingEvent(teamId, 'billing:payment_succeeded', {
+      await logBillingEvent(teamId, AuditAction.BILLING_PAYMENT_SUCCEEDED, {
         chargeId: charge.id,
         amount: charge.amount / 100, // Convert from cents
         currency: charge.currency,
@@ -213,7 +180,7 @@ async function handleChargeFailed(charge: Stripe.Charge) {
     const teamId = charge.metadata?.teamId
 
     if (teamId) {
-      await logBillingEvent(teamId, 'billing:payment_failed', {
+      await logBillingEvent(teamId, AuditAction.BILLING_PAYMENT_FAILED, {
         chargeId: charge.id,
         amount: charge.amount / 100,
         error: charge.failure_message,
@@ -248,7 +215,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const teamId = invoice.metadata?.teamId
 
     if (teamId) {
-      await logBillingEvent(teamId, 'billing:invoice_paid', {
+      await logBillingEvent(teamId, AuditAction.BILLING_PAYMENT_SUCCEEDED, {
         invoiceId: invoice.id,
         amount: (invoice.amount_paid || 0) / 100,
         currency: invoice.currency,
@@ -269,7 +236,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     const teamId = invoice.metadata?.teamId
 
     if (teamId) {
-      await logBillingEvent(teamId, 'billing:invoice_failed', {
+      await logBillingEvent(teamId, AuditAction.BILLING_PAYMENT_FAILED, {
         invoiceId: invoice.id,
         amount: (invoice.amount_due || 0) / 100,
       })

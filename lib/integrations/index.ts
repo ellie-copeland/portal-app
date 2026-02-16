@@ -4,7 +4,7 @@
  */
 
 export { IntegrationService } from './service'
-export {
+export type {
   IntegrationExecutionRequest,
   IntegrationExecutionResponse,
   ExecutionContext,

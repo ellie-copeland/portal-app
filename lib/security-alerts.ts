@@ -22,18 +22,21 @@ export interface SecurityAlertPayload {
  */
 export async function createSecurityAlert(payload: SecurityAlertPayload): Promise<void> {
   try {
-    // Create alert in database
-    const alert = await prisma.alert.create({
-      data: {
-        teamId: payload.teamId,
-        agentId: payload.metadata?.agentId,
-        severity: payload.severity,
-        source: payload.source,
-        title: payload.title,
-        message: payload.message,
-        metadata: payload.metadata,
-      },
-    })
+    // Only create alert in database if teamId is provided
+    let alert = null
+    if (payload.teamId) {
+      alert = await prisma.alert.create({
+        data: {
+          teamId: payload.teamId,
+          agentId: payload.metadata?.agentId,
+          severity: payload.severity,
+          source: payload.source,
+          title: payload.title,
+          message: payload.message,
+          metadata: payload.metadata,
+        },
+      })
+    }
 
     // Log to audit trail
     await logSecurityAlert(

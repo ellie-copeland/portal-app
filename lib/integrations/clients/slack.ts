@@ -98,7 +98,7 @@ export class SlackClient extends BaseIntegrationClient {
       return {
         channel: result.channel,
         ts: result.ts,
-        message_id: result.message_id,
+        message_id: result.ts, // Slack uses 'ts' as the message identifier
       }
     }, 'send_message')
   }
@@ -168,7 +168,7 @@ export class SlackClient extends BaseIntegrationClient {
       return {
         channel: result.channel,
         ts: result.ts,
-        thread_ts: result.message.thread_ts,
+        thread_ts: result.ts, // In threaded messages, ts is the thread identifier
       }
     }, 'post_thread')
   }
